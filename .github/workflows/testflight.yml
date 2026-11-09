@@ -34,7 +34,17 @@ jobs:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
           mkdir -p "$RUNNER_TEMP/keys"
-          echo "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8"
+          # Yapıştırırken bozulan satır sonlarını/boşlukları düzeltip geçerli PEM'e çevir
+          python3 - "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" <<'PY'
+          import os, re, sys, base64, textwrap
+          raw = os.environ["ASC_KEY_P8"]
+          body = re.sub(r"-----(BEGIN|END)[A-Z ]*-----", "", raw)
+          body = re.sub(r"[^A-Za-z0-9+/=]", "", body)
+          base64.b64decode(body)  # bozuksa burada hata verir
+          pem = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(textwrap.wrap(body, 64)) + "\n-----END PRIVATE KEY-----\n"
+          open(sys.argv[1], "w").write(pem)
+          print("Anahtar uzunluğu:", len(body), "karakter")
+          PY
 
       # İmzasız arşiv; imzayı aşağıda Apple'ın bulut sertifikası atar (Mac'te sertifika gerekmez).
       - name: Arşivle
