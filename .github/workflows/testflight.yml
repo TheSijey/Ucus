@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 40
     env:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -16,8 +16,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Xcode sürümü
-        run: xcodebuild -version
+      - name: En yeni Xcode'u seç
+        run: |
+          ls -d /Applications/Xcode*.app
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -v -i beta | sort -V | tail -1)
+          [ -n "$XC" ] && sudo xcode-select -s "$XC"
+          xcodebuild -version
 
       - name: XcodeGen ile proje oluştur
         run: |
