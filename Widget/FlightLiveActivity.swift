@@ -35,10 +35,10 @@ struct FlightLiveActivity: Widget {
                     HStack {
                         Text("Stand \(Display.text(s.stand))")
                         Spacer()
-                        if let t = s.tsat ?? s.tobt {
-                            Text(s.tsat != nil ? "TSAT" : "TOBT").foregroundStyle(.secondary)
-                            Text(t, format: .dateTime.hour().minute())
-                        }
+                        Text("İmzaya").foregroundStyle(.secondary)
+                        SignOnCountdown(signOn: s.signOn)
+                            .frame(maxWidth: 70)
+                            .foregroundStyle(.yellow)
                         Button(intent: RefreshFlightIntent()) {
                             Image(systemName: "arrow.clockwise")
                         }
@@ -88,6 +88,11 @@ struct LockScreenView: View {
             }
             Text("\(Display.text(state.registration)) · Std \(Display.text(state.stand))")
                 .font(.caption)
+            HStack(spacing: 4) {
+                Text("İmza").foregroundStyle(.white.opacity(0.6))
+                SignOnCountdown(signOn: state.signOn).foregroundStyle(.yellow)
+            }
+            .font(.caption.bold())
         }
         .padding(8)
         .foregroundStyle(.white)
@@ -112,6 +117,12 @@ struct LockScreenView: View {
                 Text(state.aircraftType).font(.subheadline).foregroundStyle(.white.opacity(0.6))
                 Spacer()
                 Text("Stand \(Display.text(state.stand))").font(.headline)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("İmzaya").font(.subheadline).foregroundStyle(.white.opacity(0.6))
+                SignOnCountdown(signOn: state.signOn)
+                    .font(.title3.bold())
+                    .foregroundStyle(.yellow)
             }
             HStack(spacing: 14) {
                 timeItem("İmza", state.signOn)

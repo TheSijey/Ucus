@@ -1,5 +1,6 @@
 import ActivityKit
 import Foundation
+import SwiftUI
 
 /// Canlı Etkinlik verisi. Hem uygulama hem widget eklentisi kullanır.
 struct FlightAttributes: ActivityAttributes {
@@ -30,6 +31,15 @@ extension FlightAttributes.ContentState {
     /// "TC-LTD" -> "LTD"
     var shortRegistration: String {
         registration.components(separatedBy: "-").last ?? registration
+    }
+}
+
+/// İmzaya kalan süre; kendi kendine her saniye işler (güncelleme gerekmez). İmza gelince 0:00'da durur.
+struct SignOnCountdown: View {
+    let signOn: Date
+    var body: some View {
+        Text(timerInterval: signOn.addingTimeInterval(-86_400)...signOn, countsDown: true)
+            .monospacedDigit()
     }
 }
 

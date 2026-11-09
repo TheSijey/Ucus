@@ -45,6 +45,11 @@ struct ContentView: View {
                         row("Stand", info.stand)
                     }
                     Section("Saatler (yerel)") {
+                        LabeledContent("İmzaya kalan") {
+                            SignOnCountdown(signOn: info.signOn)
+                                .font(.title3.bold())
+                                .foregroundStyle(.orange)
+                        }
                         timeRow("İmza", info.signOn)
                         timeRow("EOBT", info.eobt)
                         timeRow("TOBT", info.tobt)
