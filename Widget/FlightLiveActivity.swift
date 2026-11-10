@@ -48,9 +48,15 @@ struct FlightLiveActivity: Widget {
                     .font(.subheadline.monospacedDigit())
                 }
             } compactLeading: {
-                Text(s.flight)
-                    .font(.caption.bold())
-                    .monospacedDigit()
+                VStack(alignment: .leading, spacing: -1) {
+                    Text(s.flight)
+                        .font(.system(size: 11, weight: .bold))
+                    SignOnCountdown(signOn: s.signOn)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.yellow)
+                        .frame(maxWidth: 52, alignment: .leading)
+                }
+                .monospacedDigit()
             } compactTrailing: {
                 Text("\(s.shortRegistration) \(Display.text(s.stand))")
                     .font(.caption.bold())
