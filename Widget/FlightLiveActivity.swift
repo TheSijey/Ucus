@@ -94,14 +94,14 @@ struct LockScreenView: View {
             PhaseCountdown(state: state)
                 .font(.caption.bold())
         }
-        .padding(10)
+        .padding(12)
         .foregroundStyle(.white)
     }
 
     private var fullView: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text(state.flight).font(.title2.bold())
+                Text(state.flight).font(.title3.bold())
                 if !state.destination.isEmpty {
                     Image(systemName: "arrow.right").font(.caption)
                     Text(state.destination).font(.title3.bold())
@@ -109,7 +109,7 @@ struct LockScreenView: View {
                 Spacer()
                 VStack(alignment: .trailing, spacing: 0) {
                     Text("STAND").font(.caption2).foregroundStyle(.white.opacity(0.6))
-                    Text(Display.text(state.stand)).font(.title.bold()).foregroundStyle(.cyan)
+                    Text(Display.text(state.stand)).font(.title2.bold()).foregroundStyle(.cyan)
                 }
             }
             HStack {
@@ -153,9 +153,9 @@ struct LockScreenView: View {
                 Text("Süre doldu").font(.caption).foregroundStyle(.orange)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 18)
-        .padding(.bottom, 16)
+        .padding(.horizontal, 24)
+        .padding(.top, 22)
+        .padding(.bottom, 20)
         .foregroundStyle(.white)
     }
 

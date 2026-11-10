@@ -169,8 +169,8 @@ struct ContentView: View {
     }
 
     private func dayLabel(_ date: Date) -> String {
-        let cal = Calendar.current
-        let text = date.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "tr_TR")))
+        let cal = UTC.calendar
+        let text = UTCFormat.day(date) + " (UTC)"
         if cal.isDateInToday(date) { return "Bugün · " + text }
         if cal.isDateInTomorrow(date) { return "Yarın · " + text }
         return text
@@ -215,9 +215,9 @@ struct ContentView: View {
             // Planlı uçuşta CDM başka bir günü gösteriyorsa sor.
             if let plannedDay {
                 let departure = state.eobt ?? state.signOn.addingTimeInterval(CDMParser.signOnBeforeEOBT)
-                if !Calendar.current.isDate(departure, inSameDayAs: plannedDay) {
-                    let shown = departure.formatted(.dateTime.day().month(.wide).hour().minute()
-                        .locale(Locale(identifier: "tr_TR")))
+                let cal = UTC.calendar
+                if !cal.isDate(departure, inSameDayAs: plannedDay), !cal.isDate(state.signOn, inSameDayAs: plannedDay) {
+                    let shown = UTCFormat.dayTime(departure) + " UTC"
                     pending = PendingStart(
                         query: q, state: state,
                         message: "CDM şu an \(state.flight) için \(shown) kalkışlı uçuşu gösteriyor. Bu senin \(dayLabel(plannedDay)) uçuşun olmayabilir; CDM o günün uçuşunu genelde aynı gün gösterir.")
@@ -258,6 +258,27 @@ struct ContentView: View {
 
 // MARK: - Uçuş ekleme
 
+enum UTCFormat {
+    private static func style(_ base: Date.FormatStyle) -> Date.FormatStyle {
+        var st = base
+        st.timeZone = UTC.zone
+        st.locale = Locale(identifier: "tr_TR")
+        return st
+    }
+    /// "10 Kasım Pazartesi"
+    static func day(_ d: Date) -> String {
+        d.formatted(style(.dateTime.day().month(.wide).weekday(.wide)))
+    }
+    /// "10 Kas"
+    static func shortDay(_ d: Date) -> String {
+        d.formatted(style(.dateTime.day().month(.abbreviated)))
+    }
+    /// "10 Kasım 22:30"
+    static func dayTime(_ d: Date) -> String {
+        d.formatted(style(.dateTime.day().month(.wide).hour().minute()))
+    }
+}
+
 struct AddFlightView: View {
     @Environment(\.dismiss) private var dismiss
     let onAdd: (Date, String) -> Void
@@ -267,24 +288,30 @@ struct AddFlightView: View {
     @State private var added: [String] = []
     @FocusState private var focused: Bool
 
+    private var canAdd: Bool { !flight.trimmingCharacters(in: .whitespaces).isEmpty }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     DatePicker("Tarih", selection: $date,
-                               in: Calendar.current.startOfDay(for: Date())...,
+                               in: UTC.calendar.date(byAdding: .day, value: -1, to: UTC.startOfDay(Date()))!...,
                                displayedComponents: .date)
                         .datePickerStyle(.graphical)
+                        .environment(\.timeZone, UTC.zone)
                         .environment(\.locale, Locale(identifier: "tr_TR"))
+                } header: {
+                    Text("Tarih (UTC – roster'daki gibi)")
+                }
+                Section {
                     TextField("Sefer (1751 ya da TK1751)", text: $flight)
+                        .font(.title3.monospaced())
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
                         .keyboardType(.asciiCapable)
                         .focused($focused)
                         .submitLabel(.done)
                         .onSubmit(addCurrent)
-                    Button("Ekle", action: addCurrent)
-                        .disabled(flight.trimmingCharacters(in: .whitespaces).isEmpty)
                 } footer: {
                     Text("Ekledikçe takvim bir sonraki güne geçer; birden fazla uçuşu arka arkaya girebilirsin.")
                 }
@@ -293,6 +320,21 @@ struct AddFlightView: View {
                         ForEach(added, id: \.self) { Text($0) }
                     }
                 }
+            }
+            // Klavye açıkken de hep görünen büyük Ekle butonu
+            .safeAreaInset(edge: .bottom) {
+                Button(action: addCurrent) {
+                    Label("Ekle · \(UTCFormat.shortDay(date))", systemImage: "plus.circle.fill")
+                        .font(.title3.bold())
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(!canAdd)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(.bar)
             }
             .navigationTitle("Uçuş ekle")
             .navigationBarTitleDisplayMode(.inline)
@@ -308,10 +350,9 @@ struct AddFlightView: View {
         let f = flight.trimmingCharacters(in: .whitespaces)
         guard !f.isEmpty else { return }
         onAdd(date, f)
-        let label = date.formatted(.dateTime.day().month(.abbreviated).locale(Locale(identifier: "tr_TR")))
-        added.insert("\(label) – \(FlightStore.normalizeFlight(f))", at: 0)
+        added.insert("\(UTCFormat.shortDay(date)) – \(FlightStore.normalizeFlight(f))", at: 0)
         flight = ""
-        date = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date
+        date = UTC.calendar.date(byAdding: .day, value: 1, to: date) ?? date
         focused = true
     }
 }
