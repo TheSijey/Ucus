@@ -71,6 +71,7 @@ enum CDMParser {
             destination: destination,
             gate: value("Gate") ?? "",
             stand: value("Stand") ?? "",
+            runway: value("Runway") ?? "",
             eobt: eobt,
             tobt: tobt,
             tsat: time("TSAT"),

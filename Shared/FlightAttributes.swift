@@ -12,6 +12,7 @@ struct FlightAttributes: ActivityAttributes {
         var destination: String     // "OSL"
         var gate: String            // "A3A"
         var stand: String           // "A3L"
+        var runway: String          // "35R"
         var eobt: Date?
         var tobt: Date?
         var tsat: Date?

@@ -43,6 +43,7 @@ struct ContentView: View {
                         row("Tescil", "\(Display.text(info.registration))  ·  \(Display.text(info.aircraftType))")
                         row("Gate", info.gate)
                         row("Stand", info.stand)
+                        row("Pist", info.runway)
                     }
                     Section("Saatler (yerel)") {
                         LabeledContent("İmzaya kalan") {

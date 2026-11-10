@@ -27,13 +27,13 @@ struct FlightLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text("GATE").font(.caption2).foregroundStyle(.secondary)
-                        Text(Display.text(s.gate)).font(.title2.bold()).foregroundStyle(.cyan)
+                        Text("STAND").font(.caption2).foregroundStyle(.secondary)
+                        Text(Display.text(s.stand)).font(.title2.bold()).foregroundStyle(.cyan)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack {
-                        Text("Stand \(Display.text(s.stand))")
+                        Text("Gate \(Display.text(s.gate))")
                         Spacer()
                         Text("İmzaya").foregroundStyle(.secondary)
                         SignOnCountdown(signOn: s.signOn)
@@ -52,11 +52,11 @@ struct FlightLiveActivity: Widget {
                     .font(.caption.bold())
                     .monospacedDigit()
             } compactTrailing: {
-                Text("\(s.shortRegistration) \(Display.text(s.gate))")
+                Text("\(s.shortRegistration) \(Display.text(s.stand))")
                     .font(.caption.bold())
                     .foregroundStyle(.cyan)
             } minimal: {
-                Text(Display.text(s.gate))
+                Text(Display.text(s.stand))
                     .font(.caption2.bold())
                     .foregroundStyle(.cyan)
             }
@@ -123,6 +123,9 @@ struct LockScreenView: View {
                 SignOnCountdown(signOn: state.signOn)
                     .font(.title3.bold())
                     .foregroundStyle(.yellow)
+                Spacer()
+                Text("RWY").font(.subheadline).foregroundStyle(.white.opacity(0.6))
+                Text(Display.text(state.runway)).font(.title3.bold())
             }
             HStack(spacing: 14) {
                 timeItem("İmza", state.signOn)
