@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var showAdd = false
     @State private var showSettings = false
     @State private var pending: PendingStart?
+    @AppStorage("onboardingDone") private var onboardingDone = false
     @FocusState private var focused: Bool
 
     /// CDM başka bir günün uçuşunu gösterdiğinde onay için bekletilen başlatma.
@@ -91,6 +92,9 @@ struct ContentView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
+            .fullScreenCover(isPresented: Binding(get: { !onboardingDone }, set: { if !$0 { onboardingDone = true } })) {
+                OnboardingView()
+            }
             .alert("Tarih farklı", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } })) {
                 Button("Yine de ekle") {
                     if let p = pending { Task { await begin(query: p.query, state: p.state) } }
@@ -118,6 +122,28 @@ struct ContentView: View {
             row("Stand", info.stand)
             row("Gate", info.gate)
             row("Pist", info.runway)
+        }
+        if let ib = info.inbound {
+            Section("Gelen uçak") {
+                row("Nereden", [ib.flight, ib.fromCode, ib.fromCity].filter { !$0.isEmpty }.joined(separator: " · "))
+                if let parked = ib.parked {
+                    LabeledContent("Park etti") {
+                        Text("\(parked.formatted(.dateTime.hour().minute())) · ") + Text(parked, style: .relative) + Text(" önce")
+                    }
+                } else {
+                    if let landed = ib.landed {
+                        timeRow("İndi", landed)
+                    } else {
+                        timeRow("Tahmini iniş", ib.estimatedLanding)
+                    }
+                    timeRow("Tahmini park", ib.estimatedPark)
+                }
+                if let t = ib.taxiMinutes {
+                    LabeledContent("Taksi tahmini") {
+                        Text((ib.taxiSamples ?? 0) > 0 ? "\(t) dk (\(ib.taxiSamples!) ölçüm)" : "\(t) dk (genel)")
+                    }
+                }
+            }
         }
         Section("Saatler (yerel)") {
             if let leave = info.upcomingLeave() {
@@ -210,7 +236,7 @@ struct ContentView: View {
         defer { loading = false }
         do {
             let q = CDMFetcher.normalize(raw)
-            let state = try await CDMFetcher.shared.fetch(query: raw)
+            let state = try await FlightLoader.load(query: raw)
 
             // Planlı uçuşta CDM başka bir günü gösteriyorsa sor.
             if let plannedDay {
@@ -377,6 +403,23 @@ struct SettingsView: View {
                     Text("Çıkış bildirimi")
                 } footer: {
                     Text("Bu saate kadar Ada'da yeşil ev sayacı, sonra sarı imza sayacı görünür. O anda chime sesiyle bildirim gelir. Değişiklik bir sonraki Ada'ya eklemede geçerli olur.")
+                }
+                Section {
+                    NavigationLink("Nasıl kullanılır?") { HelpView() }
+                }
+                if InboundService.isEnabled {
+                    Section {
+                        let stats = TaxiStats.summary
+                        if stats.isEmpty {
+                            Text("Henüz ölçüm yok. Gelen uçağı parka girmiş uçuşlara baktıkça birikir.")
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(stats, id: \.zone) { z in
+                            LabeledContent("\(z.zone) standları", value: "\(z.minutes) dk · \(z.count) ölçüm")
+                        }
+                    } header: {
+                        Text("Öğrenilen taksi süreleri")
+                    }
                 }
                 Section {
                     Button("Bildirim sesini dene") {

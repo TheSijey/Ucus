@@ -99,7 +99,7 @@ struct LockScreenView: View {
     }
 
     private var fullView: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: state.inbound == nil ? 10 : 7) {
             HStack(alignment: .firstTextBaseline) {
                 Text(state.flight).font(.title3.bold())
                 if !state.destination.isEmpty {
@@ -117,6 +117,9 @@ struct LockScreenView: View {
                 Text(state.aircraftType).font(.subheadline).foregroundStyle(.white.opacity(0.6))
                 Spacer()
                 Text("Gate \(Display.text(state.gate))").font(.subheadline).foregroundStyle(.white.opacity(0.8))
+            }
+            if let ib = state.inbound {
+                InboundLine(info: ib)
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 if let leave = state.upcomingLeave() {
@@ -168,5 +171,33 @@ struct LockScreenView: View {
                 Text("—").font(.subheadline)
             }
         }
+    }
+}
+
+/// "✈︎ Geliş AYT · park 47 dk önce" ya da "✈︎ Geliş AYT · parkta ~19:51"
+struct InboundLine: View {
+    let info: InboundInfo
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "airplane.arrival")
+            Text("Geliş").foregroundStyle(.white.opacity(0.6))
+            Text(info.fromCode.isEmpty ? "—" : info.fromCode).bold()
+            Text("·")
+            if let parked = info.parked {
+                Text("park")
+                Text(parked, style: .relative)
+                Text("önce")
+            } else if let est = info.estimatedPark {
+                Text(info.landed != nil ? "indi, parkta ~" : "parkta ~")
+                Text(est, format: .dateTime.hour().minute()).bold()
+            } else {
+                Text("bilgi yok")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.white.opacity(0.85))
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
     }
 }

@@ -20,10 +20,24 @@ struct FlightAttributes: ActivityAttributes {
         var signOn: Date            // EOBT - 1:15
         var updatedAt: Date
         var leaveAt: Date? = nil    // evden çıkış (imza - ayar); yoksa sadece imza sayacı
+        var inbound: InboundInfo? = nil  // uçağın gelen seferi (FlightAware)
     }
 
     /// Kullanıcının aradığı şey (1751, LTD ...). Yenilemede tekrar kullanılır.
     var query: String
+}
+
+/// Uçağın İstanbul'a gelen son seferi.
+struct InboundInfo: Codable, Hashable {
+    var fromCode: String         // "AYT"
+    var fromCity: String         // "Antalya"
+    var flight: String           // "TK2411"
+    var landed: Date?            // gerçek iniş
+    var parked: Date?            // gerçek parka giriş
+    var estimatedLanding: Date?  // henüz inmediyse
+    var estimatedPark: Date?     // henüz parkta değilse: iniş + taksi
+    var taxiMinutes: Int?        // kullanılan taksi tahmini
+    var taxiSamples: Int?        // tahminin dayandığı ölçüm sayısı
 }
 
 extension FlightAttributes.ContentState {

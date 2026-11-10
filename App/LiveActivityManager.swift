@@ -79,7 +79,7 @@ enum FlightRefresher {
         await LiveActivityManager.endExpired()
         guard let activity = LiveActivityManager.current else { return }
         do {
-            var state = try await CDMFetcher.shared.fetch(query: activity.attributes.query)
+            var state = try await FlightLoader.load(query: activity.attributes.query)
             let old = activity.content.state
             state.signOn = old.signOn
             state.leaveAt = old.upcomingLeave()

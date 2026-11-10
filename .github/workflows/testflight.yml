@@ -2,6 +2,11 @@ name: TestFlight
 
 on:
   workflow_dispatch:
+    inputs:
+      upload:
+        description: "TestFlight'a yükle (kapalıysa sadece derleme testi)"
+        type: boolean
+        default: true
   push:
     branches: [main]
 
@@ -54,9 +59,11 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Ucus.xcarchive" \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            AEROAPI_KEY="${{ secrets.AEROAPI_KEY }}" \
             CODE_SIGNING_ALLOWED=NO
 
       - name: İmzala ve TestFlight'a yükle
+        if: ${{ github.event_name == 'push' || inputs.upload }}
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
