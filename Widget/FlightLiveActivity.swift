@@ -90,9 +90,9 @@ struct LockScreenView: View {
             HStack {
                 Text(state.flight).bold()
                 Spacer()
-                Text(Display.text(state.gate)).bold().foregroundStyle(.cyan)
+                Text(Display.text(state.stand)).bold().foregroundStyle(.cyan)
             }
-            Text("\(Display.text(state.registration)) · Std \(Display.text(state.stand))")
+            Text("\(Display.text(state.registration)) · Gate \(Display.text(state.gate))")
                 .font(.caption)
             HStack(spacing: 4) {
                 Text("İmza").foregroundStyle(.white.opacity(0.6))
@@ -100,7 +100,7 @@ struct LockScreenView: View {
             }
             .font(.caption.bold())
         }
-        .padding(8)
+        .padding(10)
         .foregroundStyle(.white)
     }
 
@@ -114,15 +114,15 @@ struct LockScreenView: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 0) {
-                    Text("GATE").font(.caption2).foregroundStyle(.white.opacity(0.6))
-                    Text(Display.text(state.gate)).font(.title.bold()).foregroundStyle(.cyan)
+                    Text("STAND").font(.caption2).foregroundStyle(.white.opacity(0.6))
+                    Text(Display.text(state.stand)).font(.title.bold()).foregroundStyle(.cyan)
                 }
             }
             HStack {
                 Text(Display.text(state.registration)).font(.headline)
                 Text(state.aircraftType).font(.subheadline).foregroundStyle(.white.opacity(0.6))
                 Spacer()
-                Text("Stand \(Display.text(state.stand))").font(.headline)
+                Text("Gate \(Display.text(state.gate))").font(.subheadline).foregroundStyle(.white.opacity(0.8))
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("İmzaya").font(.subheadline).foregroundStyle(.white.opacity(0.6))
@@ -151,7 +151,9 @@ struct LockScreenView: View {
                 Text("Süre doldu").font(.caption).foregroundStyle(.orange)
             }
         }
-        .padding()
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 16)
         .foregroundStyle(.white)
     }
 
