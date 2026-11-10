@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct UcusApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -10,11 +11,11 @@ struct UcusApp: App {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
-                Task { await LiveActivityManager.endExpired() }
+                Task { await LiveActivityManager.refreshPhase() }
             }
         }
-        .backgroundTask(.appRefresh(LiveActivityManager.cleanupTaskID)) {
-            await LiveActivityManager.endExpired()
+        .backgroundTask(.appRefresh(LiveActivityManager.wakeTaskID)) {
+            await LiveActivityManager.refreshPhase()
         }
     }
 }

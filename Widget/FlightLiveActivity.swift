@@ -35,10 +35,8 @@ struct FlightLiveActivity: Widget {
                     HStack {
                         Text("Gate \(Display.text(s.gate))")
                         Spacer()
-                        Text("İmzaya").foregroundStyle(.secondary)
-                        SignOnCountdown(signOn: s.signOn)
-                            .frame(maxWidth: 70)
-                            .foregroundStyle(.yellow)
+                        PhaseCountdown(state: s)
+                            .frame(maxWidth: 130, alignment: .trailing)
                         Button(intent: RefreshFlightIntent()) {
                             Image(systemName: "arrow.clockwise")
                         }
@@ -51,10 +49,9 @@ struct FlightLiveActivity: Widget {
                 VStack(alignment: .leading, spacing: -1) {
                     Text(s.flight)
                         .font(.system(size: 11, weight: .bold))
-                    SignOnCountdown(signOn: s.signOn)
+                    PhaseCountdown(state: s, showLabel: false, showIcon: true)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.yellow)
-                        .frame(maxWidth: 52, alignment: .leading)
+                        .frame(maxWidth: 60, alignment: .leading)
                 }
                 .monospacedDigit()
             } compactTrailing: {
@@ -94,11 +91,8 @@ struct LockScreenView: View {
             }
             Text("\(Display.text(state.registration)) · Gate \(Display.text(state.gate))")
                 .font(.caption)
-            HStack(spacing: 4) {
-                Text("İmza").foregroundStyle(.white.opacity(0.6))
-                SignOnCountdown(signOn: state.signOn).foregroundStyle(.yellow)
-            }
-            .font(.caption.bold())
+            PhaseCountdown(state: state)
+                .font(.caption.bold())
         }
         .padding(10)
         .foregroundStyle(.white)
@@ -125,11 +119,19 @@ struct LockScreenView: View {
                 Text("Gate \(Display.text(state.gate))").font(.subheadline).foregroundStyle(.white.opacity(0.8))
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if let leave = state.upcomingLeave() {
+                    Image(systemName: "house.fill").font(.caption).foregroundStyle(.green)
+                    Countdown(target: leave)
+                        .font(.title3.bold())
+                        .foregroundStyle(.green)
+                        .frame(maxWidth: 78, alignment: .leading)
+                }
                 Text("İmzaya").font(.subheadline).foregroundStyle(.white.opacity(0.6))
-                SignOnCountdown(signOn: state.signOn)
+                Countdown(target: state.signOn)
                     .font(.title3.bold())
                     .foregroundStyle(.yellow)
-                Spacer()
+                    .frame(maxWidth: 78, alignment: .leading)
+                Spacer(minLength: 4)
                 Text("RWY").font(.subheadline).foregroundStyle(.white.opacity(0.6))
                 Text(Display.text(state.runway)).font(.title3.bold())
             }

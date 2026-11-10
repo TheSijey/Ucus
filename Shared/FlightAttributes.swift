@@ -19,6 +19,7 @@ struct FlightAttributes: ActivityAttributes {
         var ctot: Date?
         var signOn: Date            // EOBT - 1:15
         var updatedAt: Date
+        var leaveAt: Date? = nil    // evden çıkış (imza - ayar); yoksa sadece imza sayacı
     }
 
     /// Kullanıcının aradığı şey (1751, LTD ...). Yenilemede tekrar kullanılır.
@@ -33,17 +34,57 @@ extension FlightAttributes.ContentState {
     var shortRegistration: String {
         registration.components(separatedBy: "-").last ?? registration
     }
+
+    /// Evden çıkış saati henüz gelmediyse onu döndürür.
+    func upcomingLeave(now: Date = Date()) -> Date? {
+        guard let leaveAt, now < leaveAt else { return nil }
+        return leaveAt
+    }
 }
 
-/// İmzaya kalan süre; kendi kendine her saniye işler (güncelleme gerekmez). İmza gelince 0:00'da durur.
-struct SignOnCountdown: View {
-    let signOn: Date
+/// Hedefe kalan süre; kendi kendine her saniye işler (güncelleme gerekmez). Hedefe gelince 0:00'da durur.
+struct Countdown: View {
+    let target: Date
     var body: some View {
-        Text(timerInterval: signOn.addingTimeInterval(-86_400)...signOn, countsDown: true)
+        Text(timerInterval: target.addingTimeInterval(-86_400)...target, countsDown: true)
             .monospacedDigit()
+    }
+}
+
+/// Çıkış saatine kadar yeşil ev sayacı, sonra sarı imza sayacı.
+struct PhaseCountdown: View {
+    let state: FlightAttributes.ContentState
+    var showLabel = true
+    var showIcon = false
+
+    var body: some View {
+        if let leave = state.upcomingLeave() {
+            HStack(spacing: 3) {
+                if showIcon { Image(systemName: "house.fill").font(.system(size: 8)) }
+                if showLabel { Text("Çıkışa").foregroundStyle(.secondary) }
+                Countdown(target: leave)
+            }
+            .foregroundStyle(.green)
+        } else {
+            HStack(spacing: 3) {
+                if showLabel { Text("İmzaya").foregroundStyle(.secondary) }
+                Countdown(target: state.signOn)
+            }
+            .foregroundStyle(.yellow)
+        }
     }
 }
 
 enum Display {
     static func text(_ s: String) -> String { s.isEmpty ? "—" : s }
+
+    /// 60 -> "1 saat", 75 -> "1 saat 15 dk", 45 -> "45 dk"
+    static func minutes(_ m: Int) -> String {
+        let h = m / 60, r = m % 60
+        switch (h, r) {
+        case (0, _): return "\(r) dk"
+        case (_, 0): return "\(h) saat"
+        default: return "\(h) saat \(r) dk"
+        }
+    }
 }
