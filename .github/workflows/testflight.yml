@@ -60,6 +60,7 @@ jobs:
             -archivePath "$RUNNER_TEMP/Ucus.xcarchive" \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             AEROAPI_KEY="${{ secrets.AEROAPI_KEY }}" \
+            RAPIDAPI_KEY="${{ secrets.RAPIDAPI_KEY }}" \
             CODE_SIGNING_ALLOWED=NO
 
       - name: İmzala ve TestFlight'a yükle

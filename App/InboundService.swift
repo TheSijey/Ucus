@@ -10,7 +10,28 @@ enum InboundService {
               !k.isEmpty, !k.hasPrefix("$(") else { return nil }
         return k
     }
-    static var isEnabled: Bool { apiKey != nil }
+    static var rapidKey: String? {
+        guard let k = Bundle.main.object(forInfoDictionaryKey: "RapidAPIKey") as? String,
+              !k.isEmpty, !k.hasPrefix("$(") else { return nil }
+        return k
+    }
+    static var isEnabled: Bool { apiKey != nil || rapidKey != nil }
+
+    /// Önce FlightAware, sonuç yoksa AeroDataBox.
+    static func fetch(registration: String, before departure: Date?, stand: String) async -> InboundInfo? {
+        let reg = registration.uppercased()
+        guard reg.count >= 4 else { return nil }
+        if let c = cache[reg], Date().timeIntervalSince(c.date) < 120 { return c.info }
+        var info: InboundInfo? = nil
+        if apiKey != nil {
+            info = await fetchFlightAware(registration: reg, before: departure, stand: stand)
+        }
+        if info == nil, rapidKey != nil {
+            info = await AeroDataBox.fetch(registration: reg, before: departure, stand: stand)
+        }
+        cache[reg] = (Date(), info)
+        return info
+    }
 
     private struct Response: Decodable { let flights: [Flight] }
     private struct Flight: Decodable {
@@ -35,14 +56,11 @@ enum InboundService {
     }
 
     /// Basit önbellek: aynı tescil için 2 dk içinde tekrar sormaz (kota için).
-    private static var cache: [String: (date: Date, info: InboundInfo?)] = [:]
+    static var cache: [String: (date: Date, info: InboundInfo?)] = [:]
 
-    static func fetch(registration: String, before departure: Date?, stand: String) async -> InboundInfo? {
+    private static func fetchFlightAware(registration: String, before departure: Date?, stand: String) async -> InboundInfo? {
         guard let key = apiKey else { return nil }
-        let reg = registration.replacingOccurrences(of: "-", with: "").uppercased()
-        guard reg.count >= 4 else { return nil }
-
-        if let c = cache[reg], Date().timeIntervalSince(c.date) < 120 { return c.info }
+        let reg = registration.replacingOccurrences(of: "-", with: "")
 
         var comps = URLComponents(string: "https://aeroapi.flightaware.com/aeroapi/flights/\(reg)")!
         comps.queryItems = [URLQueryItem(name: "ident_type", value: "registration"),
@@ -64,10 +82,7 @@ enum InboundService {
             .filter { ($0.arrivalRef ?? .distantFuture) < limit }
             .max { ($0.arrivalRef ?? .distantPast) < ($1.arrivalRef ?? .distantPast) }
 
-        guard let f = inbound else {
-            cache[reg] = (Date(), nil)
-            return nil
-        }
+        guard let f = inbound else { return nil }
 
         // Gerçek taksi süresini öğren
         if let on = f.actual_on, let inn = f.actual_in {
@@ -90,7 +105,103 @@ enum InboundService {
         if info.parked == nil, let base = f.actual_on ?? f.estimated_on ?? f.scheduled_on {
             info.estimatedPark = base.addingTimeInterval(Double(est.minutes) * 60)
         }
-        cache[reg] = (Date(), info)
+        return info
+    }
+}
+
+/// AeroDataBox (RapidAPI) ile tescilden en yakın günün uçuşları.
+enum AeroDataBox {
+    private struct Flight: Decodable {
+        let number: String?
+        let status: String?
+        let departure: Movement?
+        let arrival: Movement?
+    }
+    private struct Movement: Decodable {
+        let airport: Airport?
+        let scheduledTime: Time?
+        let revisedTime: Time?
+        let predictedTime: Time?
+        let runwayTime: Time?
+        let runway: String?
+    }
+    private struct Airport: Decodable {
+        let icao: String?
+        let iata: String?
+        let municipalityName: String?
+        let shortName: String?
+        let name: String?
+    }
+    private struct Time: Decodable {
+        let utc: String?
+        var date: Date? { utc.flatMap(AeroDataBox.parse) }
+    }
+
+    /// "2026-11-10 16:30Z" / "2026-11-10 16:30:00Z"
+    static func parse(_ s: String) -> Date? {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        for format in ["yyyy-MM-dd HH:mmX", "yyyy-MM-dd HH:mm:ssX", "yyyy-MM-dd'T'HH:mmX", "yyyy-MM-dd'T'HH:mm:ssX"] {
+            f.dateFormat = format
+            if let d = f.date(from: s) { return d }
+        }
+        return nil
+    }
+
+    static func fetch(registration: String, before departure: Date?, stand: String) async -> InboundInfo? {
+        guard let key = InboundService.rapidKey else { return nil }
+        let reg = registration.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? registration
+        guard let url = URL(string: "https://aerodatabox.p.rapidapi.com/flights/reg/\(reg)?withAircraftImage=false&withLocation=false") else { return nil }
+        var req = URLRequest(url: url)
+        req.setValue(key, forHTTPHeaderField: "x-rapidapi-key")
+        req.setValue("aerodatabox.p.rapidapi.com", forHTTPHeaderField: "x-rapidapi-host")
+        req.timeoutInterval = 15
+
+        guard let result = try? await URLSession.shared.data(for: req),
+              (result.1 as? HTTPURLResponse)?.statusCode == 200,
+              let flights = try? JSONDecoder().decode([Flight].self, from: result.0) else { return nil }
+
+        let limit = departure ?? Date().addingTimeInterval(6 * 3600)
+        func arrivalRef(_ f: Flight) -> Date? {
+            f.arrival?.runwayTime?.date ?? f.arrival?.revisedTime?.date ?? f.arrival?.scheduledTime?.date
+        }
+        let inbound = flights
+            .filter { $0.arrival?.airport?.icao == InboundService.airport && ($0.status ?? "") != "Canceled" }
+            .filter { (arrivalRef($0) ?? .distantFuture) < limit }
+            .max { (arrivalRef($0) ?? .distantPast) < (arrivalRef($1) ?? .distantPast) }
+        guard let f = inbound, let arr = f.arrival else { return nil }
+
+        let landed = arr.runwayTime?.date
+        let arrived = (f.status ?? "").lowercased().hasPrefix("arrived")
+        // revisedTime varış için kapıya geliş saatidir; iniş saatinden sonraysa park saati say.
+        var parked: Date? = nil
+        if arrived, let rev = arr.revisedTime?.date {
+            if let landed { parked = rev > landed ? rev : nil } else { parked = rev }
+        }
+        if let landed, let parked {
+            TaxiStats.record(id: "\(f.number ?? registration)|\(Int(landed.timeIntervalSince1970))",
+                             stand: stand, minutes: Int(parked.timeIntervalSince(landed) / 60))
+        }
+
+        let est = TaxiStats.estimate(stand: stand)
+        let origin = f.departure?.airport
+        var info = InboundInfo(
+            fromCode: origin?.iata ?? origin?.icao ?? "",
+            fromCity: origin?.municipalityName ?? origin?.shortName ?? "",
+            flight: (f.number ?? "").replacingOccurrences(of: " ", with: ""),
+            landed: landed,
+            parked: parked,
+            estimatedLanding: landed == nil ? (arr.predictedTime?.date ?? arr.revisedTime?.date ?? arr.scheduledTime?.date) : nil,
+            estimatedPark: nil,
+            taxiMinutes: est.minutes,
+            taxiSamples: est.samples
+        )
+        info.landingRunway = arr.runway
+        if parked == nil, !(arrived && landed == nil),
+           let base = landed ?? info.estimatedLanding {
+            info.estimatedPark = base.addingTimeInterval(Double(est.minutes) * 60)
+        }
         return info
     }
 }

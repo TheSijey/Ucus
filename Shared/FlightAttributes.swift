@@ -38,6 +38,7 @@ struct InboundInfo: Codable, Hashable {
     var estimatedPark: Date?     // henüz parkta değilse: iniş + taksi
     var taxiMinutes: Int?        // kullanılan taksi tahmini
     var taxiSamples: Int?        // tahminin dayandığı ölçüm sayısı
+    var landingRunway: String? = nil  // iniş pisti (varsa)
 }
 
 extension FlightAttributes.ContentState {

@@ -102,7 +102,7 @@ struct HelpView: View {
                 bullet("İmzadan 30 dk sonra Ada, kilit ekranı ve saatten kaldırılır.")
             }
             if InboundService.isEnabled {
-                Section("Gelen uçak (FlightAware)") {
+                Section("Gelen uçak") {
                     bullet("Tescilden uçağın son seferi bulunur: nereden geldiği, ne zaman indiği ve parka girdiği.")
                     bullet("Henüz parkta değilse tahmini park saati = iniş + taksi süresi.")
                     bullet("Taksi süresi her uçuşta gerçek değerlerden öğrenilir; veri arttıkça tahmin iyileşir.")

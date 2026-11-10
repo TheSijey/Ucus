@@ -138,6 +138,9 @@ struct ContentView: View {
                     }
                     timeRow("Tahmini park", ib.estimatedPark)
                 }
+                if let rwy = ib.landingRunway, !rwy.isEmpty {
+                    row("İniş pisti", rwy)
+                }
                 if let t = ib.taxiMinutes {
                     LabeledContent("Taksi tahmini") {
                         Text((ib.taxiSamples ?? 0) > 0 ? "\(t) dk (\(ib.taxiSamples!) ölçüm)" : "\(t) dk (genel)")
