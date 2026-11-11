@@ -9,6 +9,10 @@ on:
         default: true
   push:
     branches: [main]
+    paths-ignore:
+      - 'Varliklarim/**'
+      - '.github/workflows/varliklar-testflight.yml'
+      - '.github/workflows/testflight.yml'
 
 jobs:
   build:
