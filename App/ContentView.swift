@@ -13,6 +13,8 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var pending: PendingStart?
     @AppStorage("onboardingDone") private var onboardingDone = false
+    @State private var startingPlanned: PlannedFlight?
+    @Environment(\.scenePhase) private var scenePhase
     @FocusState private var focused: Bool
 
     /// CDM başka bir günün uçuşunu gösterdiğinde onay için bekletilen başlatma.
@@ -109,6 +111,12 @@ struct ContentView: View {
                 loadCurrent()
             }
             .refreshable { await refresh() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    store.prune()
+                    loadCurrent()
+                }
+            }
         }
     }
 
@@ -178,7 +186,7 @@ struct ContentView: View {
 
     private func plannedRow(_ f: PlannedFlight) -> some View {
         Button {
-            Task { await start(query: f.flight, plannedDay: f.date) }
+            Task { await start(planned: f) }
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -232,7 +240,13 @@ struct ContentView: View {
         }
     }
 
+    private func start(planned f: PlannedFlight) async {
+        startingPlanned = f
+        await start(query: f.flight, plannedDay: f.date)
+    }
+
     private func start(query raw: String, plannedDay: Date?) async {
+        if plannedDay == nil { startingPlanned = nil }
         focused = false
         loading = true
         error = nil
@@ -271,6 +285,7 @@ struct ContentView: View {
         }
         do {
             try await LiveActivityManager.start(query: query, state: state)
+            if let p = startingPlanned { FlightStore.markStarted(p, hideAt: state.hideAt) }
             loadCurrent()
         } catch {
             self.error = error.localizedDescription

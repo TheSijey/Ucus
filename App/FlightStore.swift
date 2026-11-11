@@ -57,11 +57,24 @@ final class FlightStore: ObservableObject {
         save()
     }
 
-    /// Dünden (UTC) eski uçuşları siler; gece yarısını geçen uçuşlar için dün de kalır.
+    private static let startedKey = "startedPlannedFlight"   // [id, hideAt]
+
+    /// Ada'ya eklenen planlı uçuşu hatırla; süresi (imza + 30 dk) dolunca listeden düşer.
+    static func markStarted(_ flight: PlannedFlight, hideAt: Date) {
+        UserDefaults.standard.set([flight.id.uuidString, hideAt.timeIntervalSince1970], forKey: startedKey)
+    }
+
+    /// - Uçuş günü (UTC) bittikten sonra ertesi sabah 09:00'a (TR, 06:00 UTC) kadar kalır, sonra silinir.
+    /// - Ada'ya eklenip süresi dolan uçuş hemen silinir.
     func prune() {
-        let cal = UTC.calendar
-        let yesterday = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: Date()))!
-        flights.removeAll { $0.date < yesterday }
+        let now = Date()
+        flights.removeAll { $0.date.addingTimeInterval(30 * 3600) <= now }   // gün sonu + 6 saat
+        if let arr = UserDefaults.standard.array(forKey: Self.startedKey), arr.count == 2,
+           let idString = arr[0] as? String, let hide = arr[1] as? Double,
+           Date(timeIntervalSince1970: hide) <= now {
+            flights.removeAll { $0.id.uuidString == idString }
+            UserDefaults.standard.removeObject(forKey: Self.startedKey)
+        }
         save()
     }
 
