@@ -93,7 +93,8 @@ struct HelpView: View {
             Section("Ada'ya ekleme") {
                 bullet("Listede uçuşa ya da Hızlı arama'ya sefer/tescil yaz (1751, LTD, TC-LTD).")
                 bullet("CDM o günün uçuşunu genelde aynı gün gösterir; başka bir günü gösterirse uygulama sorar.")
-                bullet("Stand değişirse kilit ekranındaki ↻ ile yenile; imza saati sabit kalır.")
+                bullet("Stand ya da saat değişirse kilit ekranındaki ↻'a dokun: uygulama açılır ve yenilenir. Uygulamada sağ üstteki ↻ ya da Yenile de aynı işi yapar.")
+                bullet("EOBT öne çekilirse imza ve çıkış saatleri değişmez; ertelenirse yeni saate geçer. Uçuşu Ada'dan kaldırıp yeniden eklesen de bu kural geçerli.")
             }
             Section("Sayaçlar ve bildirim") {
                 bullet("İmza = EOBT − 1:15. Evden çıkış = imza − Ayarlar'daki süre.")

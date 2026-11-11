@@ -8,7 +8,7 @@ settings:
   base:
     DEVELOPMENT_TEAM: ${APPLE_TEAM_ID}
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "1.1"
+    MARKETING_VERSION: "1.2"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1"
@@ -33,6 +33,9 @@ targets:
         UIBackgroundModes: [fetch]
         BGTaskSchedulerPermittedIdentifiers: [com.cengiz.ucus.cleanup]
         ITSAppUsesNonExemptEncryption: false
+        CFBundleURLTypes:
+          - CFBundleURLName: com.cengiz.ucus
+            CFBundleURLSchemes: [ucus]
         AeroAPIKey: $(AEROAPI_KEY)
         RapidAPIKey: $(RAPIDAPI_KEY)
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]

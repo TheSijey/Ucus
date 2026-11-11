@@ -37,7 +37,7 @@ struct FlightLiveActivity: Widget {
                         Spacer()
                         PhaseCountdown(state: s)
                             .frame(maxWidth: 130, alignment: .trailing)
-                        Button(intent: RefreshFlightIntent()) {
+                        Link(destination: URL(string: "ucus://refresh")!) {
                             Image(systemName: "arrow.clockwise")
                         }
                         .buttonStyle(.plain)
@@ -144,7 +144,7 @@ struct LockScreenView: View {
                 timeItem("TSAT", state.tsat)
                 timeItem("CTOT", state.ctot)
                 Spacer()
-                Button(intent: RefreshFlightIntent()) {
+                Link(destination: URL(string: "ucus://refresh")!) {
                     Image(systemName: "arrow.clockwise")
                         .font(.headline)
                         .padding(8)

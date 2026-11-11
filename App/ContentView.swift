@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var pending: PendingStart?
     @AppStorage("onboardingDone") private var onboardingDone = false
     @State private var startingPlanned: PlannedFlight?
+    @State private var refreshNote: String?
     @Environment(\.scenePhase) private var scenePhase
     @FocusState private var focused: Bool
 
@@ -84,7 +85,13 @@ struct ContentView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { showSettings = true } label: { Image(systemName: "gearshape") }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if info != nil {
+                        Button { Task { await refresh() } } label: {
+                            if loading { ProgressView() } else { Image(systemName: "arrow.clockwise") }
+                        }
+                        .disabled(loading)
+                    }
                     Button { showAdd = true } label: { Image(systemName: "plus") }
                 }
             }
@@ -111,6 +118,11 @@ struct ContentView: View {
                 loadCurrent()
             }
             .refreshable { await refresh() }
+            .onOpenURL { url in
+                if url.scheme == "ucus", url.host == "refresh" {
+                    Task { await refresh() }
+                }
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     store.prune()
@@ -174,7 +186,26 @@ struct ContentView: View {
             timeRow("Kaybolma", info.hideAt)
         }
         Section {
-            Button("Yenile") { Task { await refresh() } }
+            Button {
+                Task { await refresh() }
+            } label: {
+                HStack {
+                    Label("Yenile", systemImage: "arrow.clockwise")
+                        .font(.headline)
+                    Spacer()
+                    if loading {
+                        ProgressView()
+                    } else {
+                        Text("Son: \(info.updatedAt.formatted(.dateTime.hour().minute().second()))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .disabled(loading)
+            if let refreshNote {
+                Text(refreshNote).font(.footnote).foregroundStyle(refreshNote.hasPrefix("✓") ? .green : .red)
+            }
             Button("Ada'dan kaldır", role: .destructive) {
                 Task {
                     await LiveActivityManager.endAll()
@@ -293,10 +324,20 @@ struct ContentView: View {
     }
 
     private func refresh() async {
+        guard !loading else { return }
         loading = true
         defer { loading = false }
-        await FlightRefresher.refreshActive()
-        loadCurrent()
+        let oldSignOn = info?.signOn
+        if let err = await FlightRefresher.refreshActive() {
+            refreshNote = "Yenilenemedi: \(err)"
+        } else {
+            loadCurrent()
+            var note = "✓ Güncellendi \(Date().formatted(.dateTime.hour().minute()))"
+            if let oldSignOn, let new = info?.signOn, new != oldSignOn {
+                note += " · İmza \(new.formatted(.dateTime.hour().minute())) oldu"
+            }
+            refreshNote = note
+        }
     }
 }
 
