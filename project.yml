@@ -1,6 +1,7 @@
 name: Ucus
 options:
   bundleIdPrefix: com.cengiz
+  developmentLanguage: tr
   deploymentTarget:
     iOS: "18.0"
 settings:
@@ -24,6 +25,7 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Uçuş
+        CFBundleDevelopmentRegion: tr
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSSupportsLiveActivities: true
