@@ -149,7 +149,11 @@ enum AeroDataBox {
         return nil
     }
 
-    static func fetch(registration: String, before departure: Date?, stand: String) async -> InboundInfo? {
+    /// Aynı tescil için 2 dk içinde tekrar istek atmaz (gelen uçak ve dönüş aynı yanıtı kullanır).
+    private static var flightsCache: [String: (date: Date, flights: [Flight])] = [:]
+
+    private static func loadFlights(_ registration: String) async -> [Flight]? {
+        if let c = flightsCache[registration], Date().timeIntervalSince(c.date) < 120 { return c.flights }
         guard let key = InboundService.rapidKey else { return nil }
         let reg = registration.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? registration
         guard let url = URL(string: "https://aerodatabox.p.rapidapi.com/flights/reg/\(reg)?withAircraftImage=false&withLocation=false") else { return nil }
@@ -161,6 +165,53 @@ enum AeroDataBox {
         guard let result = try? await URLSession.shared.data(for: req),
               (result.1 as? HTTPURLResponse)?.statusCode == 200,
               let flights = try? JSONDecoder().decode([Flight].self, from: result.0) else { return nil }
+        flightsCache[registration] = (Date(), flights)
+        return flights
+    }
+
+    /// "TK 94" / "TK0094" -> "TK94"
+    static func normFlight(_ s: String) -> String {
+        let t = s.uppercased().replacingOccurrences(of: " ", with: "")
+        let letters = t.prefix { $0.isLetter }
+        let rest = t.dropFirst(letters.count)
+        let digits = rest.prefix { $0.isNumber }
+        let suffix = rest.dropFirst(digits.count)
+        guard let n = Int(digits) else { return t }
+        return "\(letters)\(n)\(suffix)"
+    }
+
+    /// Bizim seferin varışı ve aynı uçağın İstanbul'a dönüş seferi.
+    static func turn(registration: String, flight: String) async -> TurnInfo? {
+        guard let flights = await loadFlights(registration.uppercased()) else { return nil }
+        let ours = normFlight(flight)
+        guard let out = flights.first(where: {
+            normFlight($0.number ?? "") == ours && $0.departure?.airport?.icao == InboundService.airport
+        }), let dest = out.arrival?.airport else { return nil }
+
+        func depRef(_ f: Flight) -> Date? {
+            f.departure?.runwayTime?.date ?? f.departure?.revisedTime?.date ?? f.departure?.scheduledTime?.date
+        }
+        let outArrival = out.arrival?.runwayTime?.date ?? out.arrival?.revisedTime?.date
+            ?? out.arrival?.predictedTime?.date ?? out.arrival?.scheduledTime?.date
+        let after = outArrival ?? depRef(out) ?? .distantPast
+        let back = flights
+            .filter { $0.departure?.airport?.icao == dest.icao && $0.arrival?.airport?.icao == InboundService.airport }
+            .filter { (depRef($0) ?? .distantPast) > after }
+            .min { (depRef($0) ?? .distantFuture) < (depRef($1) ?? .distantFuture) }
+
+        return TurnInfo(
+            destICAO: dest.icao ?? "",
+            destIATA: dest.iata ?? "",
+            destCity: dest.municipalityName ?? dest.shortName ?? "",
+            outboundArrival: outArrival,
+            returnFlight: back.map { ($0.number ?? "").replacingOccurrences(of: " ", with: "") },
+            returnDeparture: back.flatMap(depRef),
+            returnArrival: back.flatMap { $0.arrival?.revisedTime?.date ?? $0.arrival?.predictedTime?.date ?? $0.arrival?.scheduledTime?.date }
+        )
+    }
+
+    static func fetch(registration: String, before departure: Date?, stand: String) async -> InboundInfo? {
+        guard let flights = await loadFlights(registration) else { return nil }
 
         let limit = departure ?? Date().addingTimeInterval(6 * 3600)
         func arrivalRef(_ f: Flight) -> Date? {
@@ -269,6 +320,9 @@ enum FlightLoader {
         var state = try await CDMFetcher.shared.fetch(query: query)
         state.inbound = await InboundService.fetch(registration: state.registration,
                                                    before: state.eobt, stand: state.stand)
+        if InboundService.rapidKey != nil, !state.registration.isEmpty {
+            state.turn = await AeroDataBox.turn(registration: state.registration, flight: state.flight)
+        }
         return state
     }
 }

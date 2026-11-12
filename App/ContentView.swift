@@ -173,6 +173,35 @@ struct ContentView: View {
                 }
             }
         }
+        if let t = info.turn {
+            Section("Tur (yerel saat)") {
+                LabeledContent("Varış \(t.destIATA.isEmpty ? t.destICAO : t.destIATA)") {
+                    if let a = t.outboundArrival {
+                        Text(a, format: .dateTime.hour().minute()).monospacedDigit()
+                    } else { Text("—") }
+                }
+                if let rf = t.returnFlight {
+                    LabeledContent("Dönüş \(rf)") {
+                        HStack(spacing: 4) {
+                            if let d = t.returnDeparture { Text(d, format: .dateTime.hour().minute()) }
+                            Image(systemName: "arrow.right").font(.caption2)
+                            if let a = t.returnArrival { Text(a, format: .dateTime.hour().minute()) } else { Text("—") }
+                        }
+                        .monospacedDigit()
+                    }
+                    if let a = t.returnArrival {
+                        LabeledContent("İstanbul'a iniş") {
+                            Text(a, format: .dateTime.weekday(.abbreviated).hour().minute()).monospacedDigit()
+                        }
+                    }
+                } else {
+                    Text("Bu uçağın dönüş seferi henüz görünmüyor.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+        }
+        WeatherSection(icaos: ["LTFM"] + [info.turn?.destICAO].compactMap { $0 }.filter { !$0.isEmpty },
+                       reloadKey: info.updatedAt)
         Section("Saatler (yerel)") {
             if let leave = info.upcomingLeave() {
                 LabeledContent("Çıkışa kalan") {

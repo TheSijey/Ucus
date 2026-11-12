@@ -20,11 +20,23 @@ struct FlightAttributes: ActivityAttributes {
         var signOn: Date            // EOBT - 1:15
         var updatedAt: Date
         var leaveAt: Date? = nil    // evden çıkış (imza - ayar); yoksa sadece imza sayacı
-        var inbound: InboundInfo? = nil  // uçağın gelen seferi (FlightAware)
+        var inbound: InboundInfo? = nil  // uçağın gelen seferi
+        var turn: TurnInfo? = nil        // varış ve dönüş seferi
     }
 
     /// Kullanıcının aradığı şey (1751, LTD ...). Yenilemede tekrar kullanılır.
     var query: String
+}
+
+/// Bizim seferin varışı ve aynı uçağın İstanbul'a dönüşü.
+struct TurnInfo: Codable, Hashable {
+    var destICAO: String
+    var destIATA: String
+    var destCity: String
+    var outboundArrival: Date?
+    var returnFlight: String?
+    var returnDeparture: Date?
+    var returnArrival: Date?
 }
 
 /// Uçağın İstanbul'a gelen son seferi.
