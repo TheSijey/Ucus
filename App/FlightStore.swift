@@ -102,6 +102,7 @@ final class FlightStore: ObservableObject {
         if let data = try? JSONEncoder().encode(flights) {
             UserDefaults.standard.set(data, forKey: key)
         }
+        WidgetSync.push()
     }
 }
 

@@ -27,10 +27,12 @@ enum LiveActivityManager {
             NotificationManager.cancelLeave()
         }
         scheduleNextWake()
+        WidgetSync.push()
     }
 
     static func update(_ activity: Activity<FlightAttributes>, with state: FlightAttributes.ContentState) async {
         await activity.update(ActivityContent(state: state, staleDate: state.hideAt))
+        WidgetSync.push()
     }
 
     static func endAll(reason: String = "kullanıcı kaldırdı") async {
@@ -39,6 +41,7 @@ enum LiveActivityManager {
             DebugLog.add("Kapatılıyor \(a.content.state.flight): \(reason)")
             await a.end(nil, dismissalPolicy: .immediate)
         }
+        WidgetSync.push()
     }
 
     /// İmza + 30 dk geçmişse kapat.

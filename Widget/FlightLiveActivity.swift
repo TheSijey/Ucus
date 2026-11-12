@@ -7,6 +7,7 @@ import WidgetKit
 struct UcusWidgetBundle: WidgetBundle {
     var body: some Widget {
         FlightLiveActivity()
+        NextFlightWidget()
     }
 }
 

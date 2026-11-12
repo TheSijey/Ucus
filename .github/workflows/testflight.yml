@@ -67,6 +67,14 @@ jobs:
             RAPIDAPI_KEY="${{ secrets.RAPIDAPI_KEY }}" \
             CODE_SIGNING_ALLOWED=NO
 
+      # İmzasız arşive yetkileri (App Group) geçici imzayla ekle; asıl imzayı dışa aktarma atar.
+      - name: Yetkileri ekle
+        run: |
+          APP="$RUNNER_TEMP/Ucus.xcarchive/Products/Applications/Ucus.app"
+          codesign --force --sign - --entitlements Widget/UcusWidget.entitlements "$APP/PlugIns/UcusWidget.appex"
+          codesign --force --sign - --entitlements App/Ucus.entitlements "$APP"
+          codesign -d --entitlements - "$APP" 2>/dev/null | grep -A3 application-groups || true
+
       - name: İmzala ve TestFlight'a yükle
         if: ${{ github.event_name == 'push' || inputs.upload }}
         run: |
