@@ -116,6 +116,7 @@ struct ContentView: View {
             .task {
                 store.prune()
                 loadCurrent()
+                ActivityObserver.watchAll()
             }
             .refreshable { await refresh() }
             .onOpenURL { url in
@@ -127,6 +128,10 @@ struct ContentView: View {
                 if phase == .active {
                     store.prune()
                     loadCurrent()
+                    ActivityObserver.watchAll()
+                    if let info, Date().timeIntervalSince(info.updatedAt) > 180 {
+                        Task { await refresh() }
+                    }
                 }
             }
         }
@@ -208,7 +213,7 @@ struct ContentView: View {
             }
             Button("Ada'dan kaldır", role: .destructive) {
                 Task {
-                    await LiveActivityManager.endAll()
+                    await LiveActivityManager.endAll(reason: "Ada'dan kaldır butonu")
                     self.info = nil
                 }
             }
@@ -465,6 +470,7 @@ struct SettingsView: View {
                 }
                 Section {
                     NavigationLink("Nasıl kullanılır?") { HelpView() }
+                    NavigationLink("Tanılama") { DiagnosticsView() }
                 }
                 if InboundService.isEnabled {
                     Section {
@@ -496,5 +502,29 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+}
+
+struct DiagnosticsView: View {
+    @State private var lines = DebugLog.lines
+
+    var body: some View {
+        List {
+            Section {
+                if lines.isEmpty { Text("Kayıt yok.").foregroundStyle(.secondary) }
+                ForEach(lines, id: \.self) { Text($0).font(.caption.monospaced()) }
+            } footer: {
+                Text("Ada'dan düşme gibi bir sorun olursa bu ekranın görüntüsünü gönder.")
+            }
+            Section {
+                Button("Kayıtları temizle", role: .destructive) {
+                    DebugLog.clear()
+                    lines = []
+                }
+            }
+        }
+        .navigationTitle("Tanılama")
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { lines = DebugLog.lines }
     }
 }

@@ -16,6 +16,7 @@ struct FlightLiveActivity: Widget {
             LockScreenView(state: context.state, stale: context.isStale)
                 .activityBackgroundTint(Color.black.opacity(0.75))
                 .activitySystemActionForegroundColor(.white)
+                .widgetURL(URL(string: "ucus://refresh"))
         } dynamicIsland: { context in
             let s = context.state
             return DynamicIsland {

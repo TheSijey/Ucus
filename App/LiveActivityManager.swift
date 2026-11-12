@@ -9,7 +9,7 @@ enum LiveActivityManager {
     static var current: Activity<FlightAttributes>? { Activity<FlightAttributes>.activities.first }
 
     static func start(query: String, state input: FlightAttributes.ContentState) async throws {
-        await endAll()
+        await endAll(reason: "yeni uçuş eklendi")
         var state = input
         // Aynı uçuş daha önce eklendiyse ve EOBT öne çekildiyse eski (daha geç) imza kalır.
         state.signOn = SignOnMemory.resolve(flight: state.flight, newSignOn: state.signOn)
@@ -17,7 +17,9 @@ enum LiveActivityManager {
         state.leaveAt = SignOnMemory.leave(for: state.signOn, minutes: minutes)
 
         let content = ActivityContent(state: state, staleDate: state.hideAt)
-        _ = try Activity.request(attributes: FlightAttributes(query: query), content: content, pushType: nil)
+        let activity = try Activity.request(attributes: FlightAttributes(query: query), content: content, pushType: nil)
+        ActivityObserver.watch(activity)
+        DebugLog.add("Başlatıldı \(state.flight) · imza \(state.signOn.formatted(.dateTime.hour().minute())) · stand \(state.stand)")
 
         if let leave = state.leaveAt {
             await NotificationManager.scheduleLeave(flight: state.flight, at: leave, minutesBeforeSignOn: minutes)
@@ -31,9 +33,10 @@ enum LiveActivityManager {
         await activity.update(ActivityContent(state: state, staleDate: state.hideAt))
     }
 
-    static func endAll() async {
+    static func endAll(reason: String = "kullanıcı kaldırdı") async {
         NotificationManager.cancelLeave()
         for a in Activity<FlightAttributes>.activities {
+            DebugLog.add("Kapatılıyor \(a.content.state.flight): \(reason)")
             await a.end(nil, dismissalPolicy: .immediate)
         }
     }
@@ -41,6 +44,7 @@ enum LiveActivityManager {
     /// İmza + 30 dk geçmişse kapat.
     static func endExpired() async {
         for a in Activity<FlightAttributes>.activities where Date() >= a.content.state.hideAt {
+            DebugLog.add("Süresi doldu \(a.content.state.flight) (imza+30: \(a.content.state.hideAt.formatted(.dateTime.hour().minute())))")
             await a.end(nil, dismissalPolicy: .immediate)
         }
     }
@@ -77,7 +81,11 @@ enum FlightRefresher {
     @discardableResult
     static func refreshActive() async -> String? {
         await LiveActivityManager.endExpired()
-        guard let activity = LiveActivityManager.current else { return "Ada'da uçuş yok." }
+        guard let activity = LiveActivityManager.current else {
+            DebugLog.add("Yenile: Ada'da etkin uçuş yok")
+            return "Ada'da uçuş yok."
+        }
+        DebugLog.add("Yenile başladı \(activity.content.state.flight) · durum \(String(describing: activity.activityState))")
         do {
             var state = try await FlightLoader.load(query: activity.attributes.query)
             let old = activity.content.state
@@ -94,9 +102,21 @@ enum FlightRefresher {
                 }
             }
             await LiveActivityManager.update(activity, with: state)
+
+            // Güvence: etkinlik bir sebeple kapandıysa aynı bilgilerle yeniden aç.
+            try? await Task.sleep(for: .milliseconds(300))
+            if activity.activityState != .active || LiveActivityManager.current == nil {
+                DebugLog.add("Yenile sonrası etkinlik kapalı (\(String(describing: activity.activityState))) → yeniden açılıyor")
+                let content = ActivityContent(state: state, staleDate: state.hideAt)
+                if let a = try? Activity.request(attributes: activity.attributes, content: content, pushType: nil) {
+                    ActivityObserver.watch(a)
+                }
+            }
+            DebugLog.add("Yenile tamam · stand \(state.stand) · imza \(state.signOn.formatted(.dateTime.hour().minute()))")
             LiveActivityManager.scheduleNextWake()
             return nil
         } catch {
+            DebugLog.add("Yenile hata: \(error.localizedDescription.prefix(80))")
             return error.localizedDescription
         }
     }
