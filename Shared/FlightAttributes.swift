@@ -97,7 +97,7 @@ extension FlightAttributes.ContentState {
     /// Dış meydandan kalkış (CDM yok).
     var isOutstation: Bool { origin != nil }
     /// Dönüşü olmayan uçuş (yatılı ya da dış meydandan gelen).
-    var isOneWay: Bool { turn?.returnFlight == nil }
+    var isOneWay: Bool { turn != nil && turn?.returnFlight == nil }
     /// Kalkış meydanı kodu: "IST" ya da "BEY".
     var originCode: String { originIATA ?? (origin ?? "IST") }
     /// Kalkış meydanının saat dilimi.
