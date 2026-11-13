@@ -132,7 +132,7 @@ struct LockScreenView: View {
                 Text("Gate \(Display.text(state.gate))").font(.caption).foregroundStyle(.white.opacity(0.8))
             }
             // 3) Geliş
-            if let ib = state.inbound {
+            if let ib = state.freshInbound {
                 InboundLine(info: ib)
             }
             // 4) Sayaçlar                 RWY

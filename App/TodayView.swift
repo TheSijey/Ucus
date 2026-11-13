@@ -139,20 +139,19 @@ struct TodayView: View {
             Tile(title: "TOBT", value: s.tobt.map { FlightHelpers.hm($0) } ?? "")
             Tile(title: "TSAT", value: s.tsat.map { FlightHelpers.hm($0) } ?? "")
             Tile(title: "CTOT", value: s.ctot.map { FlightHelpers.hm($0) } ?? "")
-            Tile(title: "\(destCode) gate", value: dest.map { $0.isEstimate ? "~\($0.gate)" : $0.gate } ?? "",
-                 color: Palette.stand)
+            Tile(title: "\(destCode) kapı", value: dest.map { $0.isEstimate ? "~\($0.gate)" : $0.gate } ?? "")
         }
         .onTapGesture { model.tab = .tour }
     }
 
     @ViewBuilder
     private func inboundRow(_ s: FlightAttributes.ContentState) -> some View {
-        if s.inbound != nil || FlightHelpers.fr24URL(s) != nil {
+        if s.freshInbound != nil || FlightHelpers.fr24URL(s) != nil {
             Card(padding: 12) {
                 HStack(spacing: 10) {
                     Image(systemName: "airplane.arrival").font(.title3).foregroundStyle(Palette.secondary)
                     VStack(alignment: .leading, spacing: 2) {
-                        if let ib = s.inbound {
+                        if let ib = s.freshInbound {
                             Text("Gelen uçak · \(Display.text(ib.fromCode))").font(.subheadline.bold())
                             inboundSubtitle(ib).font(.caption).foregroundStyle(Palette.secondary)
                         } else {
@@ -162,7 +161,7 @@ struct TodayView: View {
                     }
                     Spacer()
                     if let url = FlightHelpers.fr24URL(s) {
-                        Button { FR24.open(url, flight: s.inbound?.flight) } label: {
+                        Button { FR24.open(url, flight: s.freshInbound?.flight) } label: {
                             Text("FR24").font(.footnote.bold())
                                 .padding(.horizontal, 12).padding(.vertical, 10)
                                 .background(Palette.card2, in: RoundedRectangle(cornerRadius: 12))

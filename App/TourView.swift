@@ -18,7 +18,7 @@ struct TourView: View {
                         .pickerStyle(.segmented)
                         .padding(.bottom, 18)
 
-                        if let ib = s.inbound { inboundStep(ib) }
+                        if let ib = s.freshInbound { inboundStep(ib) }
                         signOnStep(s)
                         outboundStep(s)
                         destinationStep(s)
@@ -105,15 +105,18 @@ struct TourView: View {
                       FlightHelpers.duration(tr.outboundArrival, tr.returnDeparture).map { "tur \($0)" } ?? ""]
                         .filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(Palette.secondary)
+                let code = tr.destIATA.isEmpty ? tr.destICAO : tr.destIATA
                 if let gate {
-                    Text(gate.isEstimate ? "Gate ~\(gate.gate) (tahmini)" : "Gate \(gate.gate)")
-                        .font(.title3.bold()).foregroundStyle(Palette.stand)
+                    Text("Yolcu kapısı \(gate.isEstimate ? "~" : "")\(gate.gate) (\(code) yayını)")
+                        .font(.subheadline).foregroundStyle(Palette.secondary)
+                    if !tr.destGateHistory.isEmpty {
+                        Text("Son günler: " + tr.destGateHistory.joined(separator: " · "))
+                            .font(.footnote).foregroundStyle(Palette.secondary.opacity(0.8))
+                    }
+                    Text("Park standı değildir; uçak uzak bir standda olabilir.")
+                        .font(.caption2).foregroundStyle(Palette.secondary.opacity(0.7))
                 } else {
-                    Text("Gate bilgisi yok").font(.headline).foregroundStyle(Palette.secondary)
-                }
-                if !tr.destGateHistory.isEmpty {
-                    Text("Son günler: " + tr.destGateHistory.joined(separator: " · "))
-                        .font(.footnote).foregroundStyle(.white.opacity(0.75))
+                    Text("Yolcu kapısı bilgisi yok").font(.subheadline).foregroundStyle(Palette.secondary)
                 }
             }
         }

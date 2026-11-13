@@ -107,7 +107,7 @@ final class AppModel: ObservableObject {
 enum FlightHelpers {
     /// Uçak havadaysa gelen seferin canlı takibi, değilse uçağın (tescil) sayfası.
     static func fr24URL(_ s: FlightAttributes.ContentState) -> URL? {
-        if let ib = s.inbound, ib.parked == nil, ib.landed == nil, !ib.flight.isEmpty {
+        if let ib = s.freshInbound, ib.parked == nil, ib.landed == nil, !ib.flight.isEmpty {
             return URL(string: "https://www.flightradar24.com/\(ib.flight.replacingOccurrences(of: " ", with: ""))")
         }
         guard !s.registration.isEmpty else { return nil }

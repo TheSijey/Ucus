@@ -162,3 +162,14 @@ struct MinutesAgo: View {
         return m % 60 == 0 ? "\(m / 60) sa" : "\(m / 60) sa \(m % 60) dk"
     }
 }
+
+
+extension FlightAttributes.ContentState {
+    /// Gelen uçak bilgisi; 12 saatten eski kayıtlar (önceki günlerin seferi) gösterilmez.
+    var freshInbound: InboundInfo? {
+        guard let ib = inbound else { return nil }
+        let latest = [ib.parked, ib.estimatedPark, ib.landed, ib.estimatedLanding].compactMap { $0 }.max()
+        guard let latest else { return ib }
+        return Date().timeIntervalSince(latest) < 12 * 3600 ? ib : nil
+    }
+}
