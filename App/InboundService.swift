@@ -124,6 +124,8 @@ enum AeroDataBox {
         let predictedTime: Time?
         let runwayTime: Time?
         let runway: String?
+        let gate: String?
+        let terminal: String?
     }
     private struct Airport: Decodable {
         let icao: String?
@@ -288,7 +290,14 @@ enum AeroDataBox {
             }
         }
 
-        return TurnInfo(
+        // Varış meydanındaki gate: dönüş seferinin kalkış gate'i (uçak oraya park eder).
+        // Bugünkü yayınlandıysa o, ayrıca son 3 günün geçmişi (günde bir kez sorgulanır).
+        var history: [String] = []
+        if let b = back, let num = b.number?.replacingOccurrences(of: " ", with: "") {
+            history = await gateHistory(flight: num, from: dest.icao ?? "", before: ref)
+        }
+
+        var info = TurnInfo(
             destICAO: dest.icao ?? "",
             destIATA: dest.iata ?? "",
             destCity: dest.municipalityName ?? dest.shortName ?? "",
@@ -297,6 +306,28 @@ enum AeroDataBox {
             returnDeparture: back.flatMap(depRef),
             returnArrival: back.flatMap(arrRef)
         )
+        info.destGateToday = back?.departure?.gate
+        info.destGateHistory = history
+        info.arrivalGateToday = out.arrival?.gate
+        return info
+    }
+
+    private static var gateCache: [String: (date: Date, gates: [String])] = [:]
+
+    /// Dönüş seferinin son 3 gündeki kalkış gate'leri (en yeni önce).
+    private static func gateHistory(flight: String, from icao: String, before ref: Date) async -> [String] {
+        let days = istanbulDays(ref.addingTimeInterval(-3 * 86_400), plus: 2)   // 3 gün önce .. dün
+        let key = flight + "|" + (days.last ?? "")
+        if let c = gateCache[key], Date().timeIntervalSince(c.date) < 86_400 { return c.gates }
+        var gates: [String] = []
+        for d in days.reversed() {
+            let list = await request(path: "flights/number/\(flight)/\(d)") ?? []
+            if let g = list.first(where: { $0.departure?.airport?.icao == icao })?.departure?.gate, !g.isEmpty {
+                gates.append(g)
+            }
+        }
+        gateCache[key] = (Date(), gates)
+        return gates
     }
 
     static func fetch(registration: String, before departure: Date?, stand: String) async -> InboundInfo? {

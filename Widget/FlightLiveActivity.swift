@@ -112,17 +112,17 @@ struct LockScreenView: View {
     }
 
     private var fullView: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
             // 1) Sefer → varış            STAND C3
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(state.flight).font(.headline.bold())
+                Text(state.flight).font(.subheadline.bold())
                 if !state.destination.isEmpty {
                     Image(systemName: "arrow.right").font(.caption2)
-                    Text(state.destination).font(.headline.bold())
+                    Text(state.destination).font(.subheadline.bold())
                 }
                 Spacer(minLength: 4)
                 Text("STAND").font(.caption2).foregroundStyle(.white.opacity(0.6))
-                Text(Display.text(state.stand)).font(.title2.bold()).foregroundStyle(.cyan)
+                Text(Display.text(state.stand)).font(.title3.bold()).foregroundStyle(.cyan)
             }
             // 2) Tescil tip               Gate
             HStack(alignment: .firstTextBaseline) {
@@ -140,18 +140,18 @@ struct LockScreenView: View {
                 if let leave = state.upcomingLeave() {
                     Image(systemName: "house.fill").font(.caption2).foregroundStyle(.green)
                     Countdown(target: leave)
-                        .font(.headline.bold())
+                        .font(.subheadline.bold())
                         .foregroundStyle(.green)
                         .frame(maxWidth: 70, alignment: .leading)
                 }
                 Text("İmzaya").font(.caption).foregroundStyle(.white.opacity(0.6))
                 Countdown(target: state.signOn)
-                    .font(.headline.bold())
+                    .font(.subheadline.bold())
                     .foregroundStyle(.yellow)
                     .frame(maxWidth: 70, alignment: .leading)
                 Spacer(minLength: 4)
                 Text("RWY").font(.caption).foregroundStyle(.white.opacity(0.6))
-                Text(Display.text(state.runway)).font(.headline.bold())
+                Text(Display.text(state.runway)).font(.subheadline.bold())
             }
             // 5) Saatler tek satır          ↻
             HStack(spacing: 8) {
@@ -170,8 +170,8 @@ struct LockScreenView: View {
                 Text("Süre doldu").font(.caption2).foregroundStyle(.orange)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 26)
+        .padding(.vertical, 18)
         .foregroundStyle(.white)
     }
 
@@ -184,7 +184,7 @@ struct LockScreenView: View {
                 Text("—")
             }
         }
-        .font(.caption.monospacedDigit())
+        .font(.caption2.monospacedDigit())
     }
 
     private func timeItem(_ title: String, _ date: Date?) -> some View {
@@ -223,9 +223,9 @@ struct InboundLine: View {
                 Text("bilgi yok")
             }
         }
-        .font(.caption)
+        .font(.caption2)
         .foregroundStyle(.white.opacity(0.85))
         .lineLimit(1)
-        .minimumScaleFactor(0.8)
+        .minimumScaleFactor(0.7)
     }
 }

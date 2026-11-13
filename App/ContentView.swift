@@ -202,6 +202,7 @@ struct ContentView: View {
                         Text(a, format: .dateTime.hour().minute()).monospacedDigit()
                     } else { Text("—") }
                 }
+                gateRows(t)
                 if let rf = t.returnFlight {
                     LabeledContent("Dönüş \(rf)") {
                         VStack(alignment: .trailing, spacing: 1) {
@@ -274,6 +275,33 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func gateRows(_ t: TurnInfo) -> some View {
+        let code = t.destIATA.isEmpty ? t.destICAO : t.destIATA
+        let today = (t.arrivalGateToday?.isEmpty == false ? t.arrivalGateToday : nil)
+            ?? (t.destGateToday?.isEmpty == false ? t.destGateToday : nil)
+        if today != nil || !t.destGateHistory.isEmpty {
+            LabeledContent("\(code) gate") {
+                VStack(alignment: .trailing, spacing: 1) {
+                    if let today {
+                        Text(today).font(.title3.bold()).foregroundStyle(.cyan)
+                    } else if let likely = mostCommon(t.destGateHistory) {
+                        Text("tahmini \(likely)").font(.headline).foregroundStyle(.cyan.opacity(0.8))
+                    }
+                    if !t.destGateHistory.isEmpty {
+                        Text("son günler: " + t.destGateHistory.joined(separator: ", "))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func mostCommon(_ list: [String]) -> String? {
+        let counts = Dictionary(list.map { ($0, 1) }, uniquingKeysWith: +)
+        return counts.max { $0.value < $1.value || ($0.value == $1.value && list.firstIndex(of: $0.key)! > list.firstIndex(of: $1.key)!) }?.key
     }
 
     /// Uçak havadaysa gelen seferin canlı takibi, değilse uçağın (tescil) sayfası.

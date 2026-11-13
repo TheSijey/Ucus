@@ -37,6 +37,9 @@ struct TurnInfo: Codable, Hashable {
     var returnFlight: String?
     var returnDeparture: Date?
     var returnArrival: Date?
+    var destGateToday: String? = nil      // dönüşün kalkış gate'i (bugün, yayınlandıysa)
+    var destGateHistory: [String] = []    // son günlerdeki gate'ler
+    var arrivalGateToday: String? = nil   // varış gate'i (bazı meydanlar yayınlar)
 }
 
 /// Uçağın İstanbul'a gelen son seferi.
