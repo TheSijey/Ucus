@@ -14,6 +14,7 @@ enum SharedStore {
         var signOn: Date
         var leaveAt: Date?
         var hideAt: Date
+        var timeline: DayTimelineData? = nil
     }
 
     struct Planned: Codable, Hashable {

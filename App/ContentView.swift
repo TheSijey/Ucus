@@ -141,6 +141,12 @@ struct ContentView: View {
 
     @ViewBuilder
     private func activeSection(_ info: FlightAttributes.ContentState) -> some View {
+        if let tl = info.dayTimeline {
+            Section("Günün akışı (yerel)") {
+                DayTimelineBar(data: tl)
+                    .padding(.vertical, 4)
+            }
+        }
         Section("Ada'da") {
             row("Sefer", "\(info.flight)  →  \(Display.text(info.destination))")
             row("Tescil", "\(Display.text(info.registration))  ·  \(Display.text(info.aircraftType))")
@@ -201,7 +207,8 @@ struct ContentView: View {
             }
         }
         WeatherSection(icaos: ["LTFM"] + [info.turn?.destICAO].compactMap { $0 }.filter { !$0.isEmpty },
-                       reloadKey: info.updatedAt)
+                       reloadKey: info.updatedAt,
+                       activeRunways: info.runway.isEmpty ? [:] : ["LTFM": info.runway])
         Section("Saatler (yerel)") {
             if let leave = info.upcomingLeave() {
                 LabeledContent("Çıkışa kalan") {

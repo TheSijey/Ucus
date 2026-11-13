@@ -22,6 +22,14 @@ struct NextFlightProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<NextFlightEntry>) -> Void) {
         let entry = current()
+        if let a = entry.active, a.timeline != nil {
+            // Zaman çizelgesindeki "şu an" işareti için 15 dk'da bir giriş
+            let entries = (0..<32).map { i in
+                NextFlightEntry(date: Date().addingTimeInterval(Double(i) * 900), active: a, planned: entry.planned)
+            }.filter { $0.date < a.hideAt.addingTimeInterval(12 * 3600) }
+            completion(Timeline(entries: entries, policy: .after(min(a.hideAt, Date().addingTimeInterval(8 * 3600)))))
+            return
+        }
         // Bir sonraki önemli anda (çıkış, kaybolma, UTC gün dönümü) ya da en geç 1 saatte yenile.
         var next = Date().addingTimeInterval(3600)
         if let a = entry.active {
@@ -37,7 +45,7 @@ struct NextFlightProvider: TimelineProvider {
 
     private func current() -> NextFlightEntry {
         var active = SharedStore.active
-        if let a = active, a.hideAt <= Date() { active = nil }
+        if let a = active, a.hideAt <= Date(), (a.timeline?.end ?? .distantPast) <= Date() { active = nil }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!
         let today = cal.startOfDay(for: Date())
@@ -173,6 +181,11 @@ struct NextFlightView: View {
                     Text("STAND").font(.caption2).foregroundStyle(.white.opacity(0.6))
                     Text(Display.text(a.stand)).font(.system(size: 40, weight: .bold)).foregroundStyle(.cyan)
                         .minimumScaleFactor(0.6)
+                    Spacer(minLength: 0)
+                    if let tl = a.timeline {
+                        DayTimelineBar(data: tl, height: 6, compactLegend: true)
+                            .frame(width: 150)
+                    }
                 }
             }
             .foregroundStyle(.white)

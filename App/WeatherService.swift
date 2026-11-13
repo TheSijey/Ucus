@@ -9,6 +9,7 @@ struct AirportWeather: Identifiable, Hashable {
     var metarTime: Date?
     var taf: String?
     var category: String?   // VFR, MVFR, IFR, LIFR
+    var runways: [String] = []   // "16L/34R" ...
 }
 
 /// aviationweather.gov (NOAA) – ücretsiz, anahtar gerektirmez.
@@ -23,7 +24,8 @@ enum WeatherService {
 
         async let metars = load("metar", ids: key)
         async let tafs = load("taf", ids: key)
-        let (m, t) = await (metars, tafs)
+        async let airports = runwayInfo(ids)
+        let (m, t, rw) = await (metars, tafs, airports)
 
         let result: [AirportWeather] = ids.map { icao in
             var w = AirportWeather(icao: icao)
@@ -36,11 +38,34 @@ enum WeatherService {
             if let row = t.first(where: { ($0["icaoId"] as? String) == icao }) {
                 w.taf = row["rawTAF"] as? String
             }
+            w.runways = rw[icao] ?? []
             return w
         }
         if result.contains(where: { $0.metar != nil || $0.taf != nil }) {
             cache[key] = (Date(), result)
         }
+        return result
+    }
+
+    /// Pist listeleri (kalıcı önbellek; pistler değişmez).
+    private static let runwayCacheKey = "runwayCache"
+    static let knownRunways: [String: [String]] = [
+        "LTFM": ["16L/34R", "16R/34L", "17L/35R", "17R/35L", "18/36"],
+    ]
+
+    private static func runwayInfo(_ ids: [String]) async -> [String: [String]] {
+        var cache = (UserDefaults.standard.dictionary(forKey: runwayCacheKey) as? [String: [String]]) ?? [:]
+        let missing = ids.filter { (cache[$0] ?? []).isEmpty && knownRunways[$0] == nil }
+        if !missing.isEmpty {
+            for row in await load("airport", ids: missing.joined(separator: ",")) {
+                guard let icao = row["icaoId"] as? String else { continue }
+                let list = (row["runways"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }
+                if !list.isEmpty { cache[icao] = list }
+            }
+            UserDefaults.standard.set(cache, forKey: runwayCacheKey)
+        }
+        var result = knownRunways
+        for id in ids where result[id] == nil { result[id] = cache[id] ?? [] }
         return result
     }
 
@@ -59,10 +84,25 @@ enum WeatherService {
 struct WeatherSection: View {
     let icaos: [String]
     let reloadKey: Date
+    var activeRunways: [String: String] = [:]   // "LTFM": "35R" (CDM kalkış pisti)
     @State private var items: [AirportWeather] = []
     @State private var loading = false
 
     var body: some View {
+        let highlights = items.flatMap { WeatherHighlights.scan(icao: $0.icao, metar: $0.metar, taf: $0.taf) }
+        if !items.isEmpty {
+            Section("Önemli durumlar") {
+                if highlights.isEmpty {
+                    Label("Dikkat çeken bir durum yok", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+                ForEach(highlights, id: \.self) { h in
+                    Label(h, systemImage: "exclamationmark.triangle.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.orange)
+                }
+            }
+        }
         Section {
             if loading && items.isEmpty {
                 HStack { ProgressView(); Text("Hava durumu alınıyor…").foregroundStyle(.secondary) }
@@ -87,6 +127,7 @@ struct WeatherSection: View {
                     Text(w.metar ?? "METAR yok")
                         .font(.caption.monospaced())
                         .textSelection(.enabled)
+                    windView(w)
                     if let taf = w.taf {
                         Text(taf)
                             .font(.caption2.monospaced())
@@ -106,6 +147,39 @@ struct WeatherSection: View {
             let r = await WeatherService.fetch(icaos)
             if !r.isEmpty { items = r }
             loading = false
+        }
+    }
+
+    @ViewBuilder
+    private func windView(_ w: AirportWeather) -> some View {
+        if let metar = w.metar, let wind = Wind.parse(metar) {
+            let comps = WindCalc.components(wind: wind, runways: w.runways)
+            let active = activeRunways[w.icao]
+            if wind.direction == nil {
+                Text("Rüzgâr değişken \(wind.speed) kt").font(.caption).foregroundStyle(.secondary)
+            } else if !comps.isEmpty {
+                // Aktif pist (CDM) önce, sonra en iyi karşı rüzgârlı 3 pist ucu
+                let ordered = comps.filter { $0.runway == active } + comps.filter { $0.runway != active }
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(ordered.prefix(4)) { c in
+                        HStack(spacing: 6) {
+                            Text(c.runway)
+                                .font(.caption.monospaced().bold())
+                                .frame(width: 34, alignment: .leading)
+                                .foregroundStyle(c.runway == active ? .cyan : .primary)
+                            Text(c.head >= 0 ? "karşı \(c.head)" : "arka \(-c.head)")
+                                .foregroundStyle(c.head >= 0 ? Color.primary : Color.orange)
+                            Text("· yan \(c.cross)\(c.crossFromLeft ? " sol" : " sağ")")
+                            if let gc = c.gustCross, let gh = c.gustHead {
+                                Text("(G: \(gh >= 0 ? "k" : "a")\(abs(gh)) / y\(gc))").foregroundStyle(.secondary)
+                            }
+                            if c.runway == active { Text("aktif").font(.caption2).foregroundStyle(.cyan) }
+                        }
+                        .font(.caption.monospacedDigit())
+                    }
+                }
+                .padding(.vertical, 2)
+            }
         }
     }
 

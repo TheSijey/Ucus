@@ -10,7 +10,11 @@ enum WidgetSync {
            s.hideAt > Date() {
             SharedStore.active = .init(flight: s.flight, registration: s.registration, stand: s.stand,
                                        gate: s.gate, destination: s.destination, signOn: s.signOn,
-                                       leaveAt: s.upcomingLeave(), hideAt: s.hideAt)
+                                       leaveAt: s.upcomingLeave(), hideAt: s.hideAt,
+                                       timeline: s.dayTimeline)
+        } else if let old = SharedStore.active, let end = old.timeline?.end, end > Date() {
+            // Ada kapandı ama günün akışı sürüyor: widget'ta çizelge kalsın.
+            SharedStore.active = old
         } else {
             SharedStore.active = nil
         }
