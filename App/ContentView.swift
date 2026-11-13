@@ -208,7 +208,8 @@ struct ContentView: View {
         }
         WeatherSection(icaos: ["LTFM"] + [info.turn?.destICAO].compactMap { $0 }.filter { !$0.isEmpty },
                        reloadKey: info.updatedAt,
-                       activeRunways: info.runway.isEmpty ? [:] : ["LTFM": info.runway])
+                       activeRunways: info.runway.isEmpty ? [:] : ["LTFM": info.runway],
+                       events: weatherEvents(info))
         Section("Saatler (yerel)") {
             if let leave = info.upcomingLeave() {
                 LabeledContent("Çıkışa kalan") {
@@ -254,6 +255,24 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    /// TAF'ta işaretlenecek saatler: İstanbul'da kalkış (yeşil) ve dönüş inişi (mavi),
+    /// varışta iniş (yeşil) ve dönüş kalkışı (mavi).
+    private func weatherEvents(_ info: FlightAttributes.ContentState) -> [String: [WeatherEvent]] {
+        var ev: [String: [WeatherEvent]] = [:]
+        let dep = info.tsat ?? info.tobt ?? info.eobt
+        var ist: [WeatherEvent] = []
+        if let dep { ist.append(WeatherEvent(label: "Kalkış", time: dep, isReturn: false)) }
+        if let t = info.turn {
+            if let ra = t.returnArrival { ist.append(WeatherEvent(label: "Dönüş iniş", time: ra, isReturn: true)) }
+            var dst: [WeatherEvent] = []
+            if let a = t.outboundArrival { dst.append(WeatherEvent(label: "İniş", time: a, isReturn: false)) }
+            if let rd = t.returnDeparture { dst.append(WeatherEvent(label: "Dönüş kalkış", time: rd, isReturn: true)) }
+            if !t.destICAO.isEmpty { ev[t.destICAO] = dst }
+        }
+        ev["LTFM"] = ist
+        return ev
     }
 
     private func plannedRow(_ f: PlannedFlight) -> some View {

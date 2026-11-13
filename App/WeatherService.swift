@@ -85,6 +85,7 @@ struct WeatherSection: View {
     let icaos: [String]
     let reloadKey: Date
     var activeRunways: [String: String] = [:]   // "LTFM": "35R" (CDM kalkış pisti)
+    var events: [String: [WeatherEvent]] = [:]  // meydan → kalkış/iniş saatleri (TAF'ta işaretlenir)
     @State private var items: [AirportWeather] = []
     @State private var loading = false
 
@@ -128,11 +129,9 @@ struct WeatherSection: View {
                         .font(.caption.monospaced())
                         .textSelection(.enabled)
                     windView(w)
+                    eventsHeader(events[w.icao] ?? [])
                     if let taf = w.taf {
-                        Text(taf)
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        tafView(taf, events: events[w.icao] ?? [])
                     }
                 }
                 .padding(.vertical, 2)
@@ -181,6 +180,60 @@ struct WeatherSection: View {
                 .padding(.vertical, 2)
             }
         }
+    }
+
+    @ViewBuilder
+    private func eventsHeader(_ evs: [WeatherEvent]) -> some View {
+        if !evs.isEmpty {
+            HStack(spacing: 10) {
+                ForEach(evs, id: \.self) { e in
+                    HStack(spacing: 4) {
+                        Circle().fill(e.isReturn ? Color.blue : Color.green).frame(width: 8, height: 8)
+                        Text("\(e.label) \(utc(e.time))Z").bold()
+                    }
+                }
+            }
+            .font(.caption.monospacedDigit())
+            .padding(.top, 2)
+        }
+    }
+
+    private func tafView(_ taf: String, events evs: [WeatherEvent]) -> some View {
+        let groups = TafParser.groups(taf)
+        return VStack(alignment: .leading, spacing: 3) {
+            ForEach(groups) { g in
+                let hits = evs.filter { g.overlaps($0.time.addingTimeInterval(-3600), $0.time.addingTimeInterval(3600)) }
+                let tint: Color? = hits.contains(where: { !$0.isReturn }) && hits.contains(where: { $0.isReturn })
+                    ? .teal : hits.first.map { $0.isReturn ? .blue : .green }
+                HStack(alignment: .top, spacing: 6) {
+                    Rectangle()
+                        .fill(tint ?? Color.gray.opacity(0.3))
+                        .frame(width: 3)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(g.text)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(tint == nil ? Color.secondary : Color.primary)
+                            .fontWeight(tint == nil ? .regular : .semibold)
+                        if !hits.isEmpty {
+                            Text(hits.map { "\($0.label) \(utc($0.time))Z" }.joined(separator: " · "))
+                                .font(.caption2.bold())
+                                .foregroundStyle(tint ?? .primary)
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+                .padding(.trailing, 4)
+                .background((tint ?? .clear).opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+            }
+        }
+        .textSelection(.enabled)
+    }
+
+    private func utc(_ d: Date) -> String {
+        var st = Date.FormatStyle.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)
+        st.timeZone = TimeZone(identifier: "UTC")!
+        st.locale = Locale(identifier: "en_GB")
+        return d.formatted(st)
     }
 
     private func color(_ cat: String) -> Color {

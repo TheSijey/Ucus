@@ -157,3 +157,117 @@ enum WeatherHighlights {
         return r
     }
 }
+
+// MARK: - TAF dönemleri
+
+struct TafGroup: Identifiable, Hashable {
+    let id: Int
+    let kind: String        // "ANA", "TEMPO", "BECMG", "PROB30", "PROB40 TEMPO", "FM"
+    let text: String
+    let start: Date?
+    let end: Date?
+
+    func overlaps(_ from: Date, _ to: Date) -> Bool {
+        guard let start, let end else { return false }
+        return start < to && end > from
+    }
+}
+
+/// Bir olay (kalkış/iniş) – TAF'ta işaretlenecek zaman.
+struct WeatherEvent: Hashable {
+    let label: String      // "Kalkış", "Dönüş iniş"
+    let time: Date
+    let isReturn: Bool     // false: yeşil (gidiş), true: mavi (dönüş)
+}
+
+enum TafParser {
+    /// "1306" -> 13'ü 06Z; "FM131530" -> 13'ü 15:30Z. Ay/yıl bugüne göre tahmin edilir.
+    static func date(day: Int, hour: Int, minute: Int = 0, near now: Date = Date()) -> Date? {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        var comps = cal.dateComponents([.year, .month, .day], from: now)
+        let today = comps.day ?? day
+        if day - today > 15, let m = comps.month { // önceki ay
+            comps.month = m - 1
+        } else if today - day > 15, let m = comps.month { // sonraki ay
+            comps.month = m + 1
+        }
+        comps.day = day
+        comps.hour = 0
+        comps.minute = minute
+        guard let base = cal.date(from: comps) else { return nil }
+        return base.addingTimeInterval(Double(hour) * 3600)   // 24 → ertesi gün 00Z
+    }
+
+    static func period(_ token: String) -> (Date, Date)? {
+        let p = token.split(separator: "/")
+        guard p.count == 2, p[0].count == 4, p[1].count == 4,
+              let d1 = Int(p[0].prefix(2)), let h1 = Int(p[0].suffix(2)),
+              let d2 = Int(p[1].prefix(2)), let h2 = Int(p[1].suffix(2)),
+              let a = date(day: d1, hour: h1), let b = date(day: d2, hour: h2) else { return nil }
+        return (a, b)
+    }
+
+    static func groups(_ taf: String) -> [TafGroup] {
+        let tokens = taf.split(separator: " ").map(String.init)
+        guard !tokens.isEmpty else { return [] }
+        var result: [TafGroup] = []
+        var kind = "ANA"
+        var body: [String] = []
+        var start: Date? = nil
+        var end: Date? = nil
+        var validity: (Date, Date)? = nil
+
+        func flush() {
+            guard !body.isEmpty else { return }
+            result.append(TafGroup(id: result.count, kind: kind, text: body.joined(separator: " "), start: start, end: end))
+        }
+
+        var i = 0
+        while i < tokens.count {
+            let t = tokens[i]
+            let isFM = t.hasPrefix("FM") && t.count == 8 && Int(t.dropFirst(2)) != nil
+            if t == "TEMPO" || t == "BECMG" || t.hasPrefix("PROB") || isFM {
+                flush()
+                body = [t]
+                if isFM {
+                    kind = "FM"
+                    let s = t.dropFirst(2)
+                    start = date(day: Int(s.prefix(2)) ?? 0, hour: Int(s.dropFirst(2).prefix(2)) ?? 0,
+                                 minute: Int(s.suffix(2)) ?? 0)
+                    end = validity?.1
+                } else {
+                    kind = t
+                    if t.hasPrefix("PROB"), i + 1 < tokens.count, tokens[i + 1] == "TEMPO" {
+                        kind += " TEMPO"; body.append("TEMPO"); i += 1
+                    }
+                    if i + 1 < tokens.count, let p = period(tokens[i + 1]) {
+                        start = p.0; end = p.1; body.append(tokens[i + 1]); i += 1
+                    } else {
+                        start = nil; end = nil
+                    }
+                }
+            } else {
+                if validity == nil, let p = period(t) {
+                    validity = p
+                    start = p.0; end = p.1
+                }
+                body.append(t)
+            }
+            i += 1
+        }
+        flush()
+
+        // FM'ler: önceki ana/FM grubunun bitişini bir sonraki FM'in başına çek
+        var fixed = result
+        var lastBase: Int? = fixed.firstIndex { $0.kind == "ANA" }
+        for (idx, g) in fixed.enumerated() where g.kind == "FM" {
+            if let lb = lastBase, let s = g.start {
+                let prev = fixed[lb]
+                fixed[lb] = TafGroup(id: prev.id, kind: prev.kind, text: prev.text, start: prev.start, end: s)
+            }
+            lastBase = idx
+        }
+        return fixed
+    }
+}
