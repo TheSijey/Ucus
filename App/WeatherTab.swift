@@ -62,6 +62,7 @@ struct WeatherTab: View {
     private func label(_ icao: String, _ s: FlightAttributes.ContentState) -> String {
         if icao == "LTFM" { return "LTFM · İstanbul" }
         if let t = s.turn, t.destICAO == icao, !t.destCity.isEmpty { return "\(icao) · \(t.destCity)" }
+        if let c = AirportDB.city(s.destination), AirportDB.icao(s.destination) == icao { return "\(icao) · \(c)" }
         return icao
     }
 

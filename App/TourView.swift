@@ -119,6 +119,14 @@ struct TourView: View {
                     Text(L("Yolcu kapısı bilgisi yok", "No passenger gate info")).font(.subheadline).foregroundStyle(Palette.secondary)
                 }
             }
+        } else if !s.destination.isEmpty {
+            Step(dot: .hollow(Palette.secondary), line: .thin) {
+                Text(AirportDB.city(s.destination) ?? s.destination).font(.caption).foregroundStyle(Palette.secondary)
+                Text(AeroDataBox.quotaBlocked
+                     ? L("Varış ve dönüş saatleri şu an alınamıyor: AeroDataBox aylık kotası doldu.", "Arrival and return times unavailable: AeroDataBox monthly quota reached.")
+                     : L("Varış ve dönüş bilgisi bulunamadı.", "No arrival/return info found."))
+                    .font(.subheadline).foregroundStyle(Palette.secondary)
+            }
         }
     }
 

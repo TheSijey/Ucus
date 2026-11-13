@@ -199,7 +199,41 @@ enum AeroDataBox {
         return all
     }
 
-    private static func request(path: String) async -> [Flight]? {
+    /// Kota dolunca (HTTP 429) bir süre hiç sorgu yapılmaz.
+    static var quotaBlocked: Bool {
+        (UserDefaults.standard.object(forKey: "aeroBlockedUntil") as? Date).map { $0 > Date() } ?? false
+    }
+
+    /// Yanıtlar diskte saklanır: uygulama kapanıp açılınca aynı sorgu tekrar yapılmaz.
+    /// Geçmiş günlerin verisi değişmediği için 7 gün, bugünkü veriler `ttl` kadar geçerli.
+    private static let cacheDir: URL = {
+        let d = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("aerodatabox")
+        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        return d
+    }()
+
+    private static func cacheFile(_ path: String) -> URL {
+        cacheDir.appendingPathComponent(path.replacingOccurrences(of: "/", with: "_") + ".json")
+    }
+
+    private static func isPastDay(_ path: String) -> Bool {
+        guard let last = path.split(separator: "/").last.map(String.init),
+              last.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil,
+              let today = istanbulDays(Date()).first else { return false }
+        return last < today
+    }
+
+    private static func decode(_ data: Data) -> [Flight]? { try? JSONDecoder().decode([Flight].self, from: data) }
+
+    private static func request(path: String, ttl: TimeInterval = 600) async -> [Flight]? {
+        let file = cacheFile(path)
+        let maxAge = isPastDay(path) ? 7 * 86_400 : ttl
+        let attrs = try? FileManager.default.attributesOfItem(atPath: file.path)
+        let age = (attrs?[.modificationDate] as? Date).map { Date().timeIntervalSince($0) } ?? .infinity
+        let cached = (try? Data(contentsOf: file)).flatMap(decode)
+        if let cached, age < maxAge { return cached }
+        if quotaBlocked { return cached }
+
         guard let key = InboundService.rapidKey,
               let url = URL(string: "https://aerodatabox.p.rapidapi.com/\(path)?withAircraftImage=false&withLocation=false")
         else { return nil }
@@ -210,15 +244,23 @@ enum AeroDataBox {
         guard let result = try? await URLSession.shared.data(for: req),
               let http = result.1 as? HTTPURLResponse else {
             DebugLog.add("AeroDataBox \(path): bağlantı hatası")
-            return nil
+            return cached
         }
-        if http.statusCode == 204 { return [] }
-        guard http.statusCode == 200,
-              let flights = try? JSONDecoder().decode([Flight].self, from: result.0) else {
+        if http.statusCode == 204 {
+            try? Data("[]".utf8).write(to: file)
+            return []
+        }
+        if http.statusCode == 429 {
+            UserDefaults.standard.set(Date().addingTimeInterval(6 * 3600), forKey: "aeroBlockedUntil")
+            DebugLog.add("AeroDataBox kotası doldu (429); 6 saat sorgu yapılmayacak")
+            return cached
+        }
+        guard http.statusCode == 200, let flights = decode(result.0) else {
             let body = String(data: result.0.prefix(120), encoding: .utf8) ?? ""
             DebugLog.add("AeroDataBox \(path): HTTP \(http.statusCode) \(body)")
-            return nil
+            return cached
         }
+        try? result.0.write(to: file)
         return flights
     }
 
@@ -239,7 +281,7 @@ enum AeroDataBox {
     private static func byNumber(_ flight: String, day: String) async -> [Flight] {
         let key = flight + "|" + day
         if let c = numberCache[key], Date().timeIntervalSince(c.date) < 3600 { return c.flights }
-        let list = await request(path: "flights/number/\(flight)/\(day)") ?? []
+        let list = await request(path: "flights/number/\(flight)/\(day)", ttl: 3600) ?? []
         numberCache[key] = (Date(), list)
         return list
     }
@@ -317,7 +359,7 @@ enum AeroDataBox {
 
     /// Gidiş seferinin son 3 günde varış meydanındaki iniş pistleri (en yeni önce).
     private static func runwayHistory(flight: String, to icao: String, before ref: Date) async -> [String] {
-        let days = istanbulDays(ref.addingTimeInterval(-3 * 86_400), plus: 2)
+        let days = istanbulDays(ref.addingTimeInterval(-2 * 86_400), plus: 1)
         let key = flight + "|" + (days.last ?? "")
         if let c = runwayCache[key], Date().timeIntervalSince(c.date) < 86_400 { return c.runways }
         var list: [String] = []
@@ -335,7 +377,7 @@ enum AeroDataBox {
 
     /// Dönüş seferinin son 3 gündeki kalkış gate'leri (en yeni önce).
     private static func gateHistory(flight: String, from icao: String, before ref: Date) async -> [String] {
-        let days = istanbulDays(ref.addingTimeInterval(-3 * 86_400), plus: 2)   // 3 gün önce .. dün
+        let days = istanbulDays(ref.addingTimeInterval(-2 * 86_400), plus: 1)   // 2 gün önce .. dün
         let key = flight + "|" + (days.last ?? "")
         if let c = gateCache[key], Date().timeIntervalSince(c.date) < 86_400 { return c.gates }
         var gates: [String] = []
