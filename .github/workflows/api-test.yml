@@ -1,10 +1,7 @@
 name: API test
 on:
-  workflow_dispatch:
-    inputs:
-      reg:
-        description: "Tescil"
-        default: "TC-LTD"
+  push:
+    branches: [api-test]
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -13,7 +10,7 @@ jobs:
       - name: AeroDataBox
         env:
           KEY: ${{ secrets.RAPIDAPI_KEY }}
-          REG: ${{ inputs.reg }}
+          REG: TC-LTD
         run: |
           echo "Anahtar uzunluğu: ${#KEY}"
           for r in "$REG" "${REG//-/}"; do
