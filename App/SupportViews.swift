@@ -58,7 +58,7 @@ struct AddFlightView: View {
                         .submitLabel(.done)
                         .onSubmit(addCurrent)
                 } footer: {
-                    Text(L("Sadece İstanbul Havalimanı (IST) kalkışlı uçuşlar: bilgiler İGA CDM'den gelir. Ekledikçe takvim bir sonraki güne geçer.", "Istanbul Airport (IST) departures only: data comes from İGA CDM. The date moves to the next day after each add."))
+                    Text(L("İstanbul kalkışlarında bilgiler İGA CDM'den, dış meydan kalkışlarında uçuş verisinden gelir. Ekledikçe takvim bir sonraki güne geçer.", "Istanbul departures use İGA CDM; outstation departures use flight data. The date moves to the next day after each add."))
                 }
                 if !added.isEmpty {
                     Section(L("Eklenenler", "Added")) {
@@ -108,6 +108,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppSettings.leaveMinutesKey) private var leaveMinutes = 60
     @AppStorage(Lang.key, store: SharedStore.defaults) private var language = "system"
+    @AppStorage(AppSettings.hotelRemindKey) private var hotelRemind = 15
 
     var body: some View {
         NavigationStack {
@@ -132,6 +133,16 @@ struct SettingsView: View {
                     Text(L("Çıkış bildirimi", "Leave alert"))
                 } footer: {
                     Text(L("Bu saate kadar Ada'da yeşil ev sayacı, sonra sarı imza sayacı görünür. O anda uçak sesli bildirim gelir. Değişiklik bir sonraki takip başlatmada geçerli olur.", "Until then the Dynamic Island shows a green leave-home countdown, then the yellow sign-on countdown. An alert with the chime sound arrives at that moment. Changes apply the next time you start tracking."))
+                }
+                Section {
+                    Stepper(value: $hotelRemind, in: 0...60, step: 5) {
+                        LabeledContent(L("Otel hatırlatması", "Hotel reminder")) {
+                            Text(hotelRemind == 0 ? L("Çıkış anında", "At pickup") : L("\(hotelRemind) dk önce", "\(hotelRemind) min before"))
+                                .monospacedDigit()
+                        }
+                    }
+                } footer: {
+                    Text(L("Dış meydan kalkışlarında, girdiğin otelden çıkış saatinden bu kadar önce uçak sesli hatırlatma gelir.", "For outstation departures, a chime reminder arrives this long before the hotel pickup time you enter."))
                 }
                 Section {
                     NavigationLink(L("Nasıl kullanılır?", "How to use")) { HelpView() }

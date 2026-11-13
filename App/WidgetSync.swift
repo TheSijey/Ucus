@@ -9,7 +9,7 @@ enum WidgetSync {
             SharedStore.active = .init(flight: s.flight, registration: s.registration, stand: s.stand,
                                        gate: s.gate, destination: s.destination, signOn: s.signOn,
                                        leaveAt: s.upcomingLeave(), hideAt: s.tourEnd,
-                                       timeline: s.dayTimeline)
+                                       timeline: s.dayTimeline, outstation: s.isOutstation)
         } else {
             SharedStore.active = nil
         }

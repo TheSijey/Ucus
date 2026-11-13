@@ -116,6 +116,11 @@ enum AeroDataBox {
         let status: String?
         let departure: Movement?
         let arrival: Movement?
+        let aircraft: Aircraft?
+    }
+    private struct Aircraft: Decodable {
+        let reg: String?
+        let model: String?
     }
     private struct Movement: Decodable {
         let airport: Airport?
@@ -133,6 +138,7 @@ enum AeroDataBox {
         let municipalityName: String?
         let shortName: String?
         let name: String?
+        let timeZone: String?
     }
     private struct Time: Decodable {
         let utc: String?
@@ -262,6 +268,56 @@ enum AeroDataBox {
         }
         try? result.0.write(to: file)
         return flights
+    }
+
+    /// Dış meydandan kalkan uçuş (CDM'de yok): bilgiler AeroDataBox'tan.
+    /// `day`: roster'daki UTC gün; yoksa en yakın (henüz kalkmamış ya da az önce kalkmış) sefer.
+    static func outstation(flight raw: String, day: Date?) async -> FlightAttributes.ContentState? {
+        let ours = normFlight(raw)
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = utc.timeZone
+        fmt.dateFormat = "yyyy-MM-dd"
+        let base = day ?? Date()
+        // AeroDataBox yerel kalkış gününe göre arar: UTC gün ve bir sonraki/önceki gün
+        let dates = [0, 1, -1].compactMap { utc.date(byAdding: .day, value: $0, to: base) }.map { fmt.string(from: $0) }
+
+        func dep(_ f: Flight) -> Date? { f.departure?.revisedTime?.date ?? f.departure?.scheduledTime?.date }
+        var candidates: [Flight] = []
+        for d in dates {
+            let list = (await request(path: "flights/number/\(ours)/\(d)", ttl: 900) ?? [])
+                .filter { ($0.departure?.airport?.icao ?? InboundService.airport) != InboundService.airport && ($0.status ?? "") != "Canceled" }
+            candidates += list
+            if let day, candidates.contains(where: { dep($0).map { utc.isDate($0, inSameDayAs: day) } ?? false }) { break }
+            if day == nil, candidates.contains(where: { (dep($0) ?? .distantPast) > Date().addingTimeInterval(-3 * 3600) }) { break }
+        }
+        let pick: Flight?
+        if let day {
+            pick = candidates.first { dep($0).map { utc.isDate($0, inSameDayAs: day) } ?? false }
+        } else {
+            pick = candidates.filter { (dep($0) ?? .distantPast) > Date().addingTimeInterval(-3 * 3600) }
+                .min { (dep($0) ?? .distantFuture) < (dep($1) ?? .distantFuture) }
+        }
+        guard let f = pick, let from = f.departure?.airport, let std = dep(f) else { return nil }
+        let to = f.arrival?.airport
+        let arrival = f.arrival?.revisedTime?.date ?? f.arrival?.predictedTime?.date ?? f.arrival?.scheduledTime?.date
+        let model = f.aircraft?.model ?? ""
+        let type = model.split(separator: " ").last.map(String.init) ?? ""
+
+        var state = FlightAttributes.ContentState(
+            flight: ours, callsign: "", registration: f.aircraft?.reg ?? "", aircraftType: type,
+            destination: to?.iata ?? "", gate: f.departure?.gate ?? "", stand: "", runway: f.departure?.runway ?? "",
+            eobt: std, tobt: nil, tsat: nil, ctot: nil,
+            signOn: std.addingTimeInterval(-3600), updatedAt: Date())
+        state.origin = from.icao
+        state.originIATA = from.iata
+        state.originCity = from.municipalityName ?? from.shortName
+        state.originTZ = from.timeZone
+        state.turn = TurnInfo(destICAO: to?.icao ?? "", destIATA: to?.iata ?? "", destCity: to?.municipalityName ?? "",
+                              outboundArrival: arrival, returnFlight: nil, returnDeparture: nil, returnArrival: nil)
+        return state
     }
 
     /// "TK 94" / "TK0094" -> "TK94"
@@ -504,8 +560,31 @@ enum TaxiStats {
 /// CDM + FlightAware'i birlikte çeker.
 @MainActor
 enum FlightLoader {
-    static func load(query: String) async throws -> FlightAttributes.ContentState {
-        var state = try await CDMFetcher.shared.fetch(query: query)
+    /// İstanbul kalkışı CDM'den; CDM'de yoksa ve bir sefer numarasıysa dış meydan kalkışı olarak AeroDataBox'tan.
+    /// `outstation`: zaten dış meydan uçuşu olduğu biliniyorsa (yenileme) CDM'ye hiç sorulmaz.
+    static func load(query: String, plannedDay: Date? = nil, outstation: Bool = false) async throws -> FlightAttributes.ContentState {
+        let q = CDMFetcher.normalize(query)
+        let isFlightNumber = q.range(of: #"^[A-Z0-9]{2}\d{1,4}[A-Z]?$"#, options: .regularExpression) != nil
+        if outstation, isFlightNumber, let s = await AeroDataBox.outstation(flight: q, day: plannedDay) {
+            return ManualTimes.apply(s)
+        }
+        let state: FlightAttributes.ContentState
+        do {
+            state = try await CDMFetcher.shared.fetch(query: query)
+        } catch {
+            if let e = error as? CDMError, case .empty = e { throw e }
+            if isFlightNumber, InboundService.rapidKey != nil,
+               let s = await AeroDataBox.outstation(flight: q, day: plannedDay) {
+                DebugLog.add("CDM'de yok, dış meydan kalkışı: \(s.flight) \(s.originCode)")
+                return ManualTimes.apply(s)
+            }
+            throw error
+        }
+        return await completeIstanbul(state)
+    }
+
+    private static func completeIstanbul(_ input: FlightAttributes.ContentState) async -> FlightAttributes.ContentState {
+        var state = input
         state.inbound = await InboundService.fetch(registration: state.registration,
                                                    before: state.eobt, stand: state.stand)
         if InboundService.rapidKey != nil, !state.registration.isEmpty {

@@ -64,7 +64,10 @@ final class CDMFetcher {
         req.setValue(safariUA, forHTTPHeaderField: "User-Agent")
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-        return CDMParser.parseJSON(data)
+        if let s = CDMParser.parseJSON(data) { return s }
+        // Servis cevap verdi ama uçuş yok: tarayıcıyla 25 sn beklemeye gerek yok
+        if (try? JSONDecoder().decode(CDMParser.APIResponse.self, from: data)) != nil { throw CDMError.notFound("") }
+        return nil
     }
 
     /// Arama kutusunu doldurup oka basar (sitenin kendi arayüzünü kullanır).

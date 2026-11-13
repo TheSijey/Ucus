@@ -23,6 +23,13 @@ struct FlightAttributes: ActivityAttributes {
         var inbound: InboundInfo? = nil  // uçağın gelen seferi
         var turn: TurnInfo? = nil        // varış ve dönüş seferi
         var sid: String? = nil           // kalkış SID (CDM)
+        // Dış meydan kalkışı (CDM yok, AeroDataBox): kalkış meydanı ve elle girilen saatler
+        var origin: String? = nil        // "OLBA"; nil = İstanbul (CDM)
+        var originIATA: String? = nil    // "BEY"
+        var originCity: String? = nil    // "Beirut"
+        var originTZ: String? = nil      // "Asia/Beirut"
+        var signOnManual: Bool? = nil    // imza elle girildi (yoksa tahmin)
+        var pickupAt: Date? = nil        // otelden çıkış (elle)
     }
 
     /// Kullanıcının aradığı şey (1751, LTD ...). Yenilemede tekrar kullanılır.
@@ -79,13 +86,24 @@ extension FlightAttributes.ContentState {
     /// İmza saatinden 30 dk sonra kaybolur.
     var hideAt: Date { signOn.addingTimeInterval(30 * 60) }
 
-    /// Turun bittiği an: dönüş inişi; yoksa gidiş varışı + 2 sa; o da yoksa imza + 6 sa.
+    /// Turun bittiği an: dönüş inişi; dönüş yoksa (tek yön) varış + 30 dk; o da yoksa imza + 6 sa.
     var tourEnd: Date {
         let end = turn?.returnArrival
-            ?? turn?.outboundArrival.map { $0.addingTimeInterval(2 * 3600) }
+            ?? turn?.outboundArrival.map { $0.addingTimeInterval(30 * 60) }
             ?? signOn.addingTimeInterval(6 * 3600)
         return max(end, hideAt)
     }
+
+    /// Dış meydandan kalkış (CDM yok).
+    var isOutstation: Bool { origin != nil }
+    /// Dönüşü olmayan uçuş (yatılı ya da dış meydandan gelen).
+    var isOneWay: Bool { turn?.returnFlight == nil }
+    /// Kalkış meydanı kodu: "IST" ya da "BEY".
+    var originCode: String { originIATA ?? (origin ?? "IST") }
+    /// Kalkış meydanının saat dilimi.
+    var originTimeZone: TimeZone { originTZ.flatMap(TimeZone.init(identifier:)) ?? TimeZone(identifier: "Europe/Istanbul")! }
+    /// Gidiş seferinin kalkış saati.
+    var departureTime: Date? { tsat ?? tobt ?? eobt }
 
     /// "TC-LTD" -> "LTD"
     var shortRegistration: String {
@@ -117,7 +135,7 @@ struct PhaseCountdown: View {
     var body: some View {
         if let leave = state.upcomingLeave() {
             HStack(spacing: 3) {
-                if showIcon { Image(systemName: "house.fill").font(.system(size: 8)) }
+                if showIcon { Image(systemName: state.isOutstation ? "building.2.fill" : "house.fill").font(.system(size: 8)) }
                 if showLabel { Text(L("Çıkışa", "Leave")).foregroundStyle(.secondary) }
                 Countdown(target: leave)
             }

@@ -112,4 +112,10 @@ enum AppSettings {
     static var leaveMinutes: Int {
         UserDefaults.standard.object(forKey: leaveMinutesKey) as? Int ?? 60
     }
+
+    static let hotelRemindKey = "hotelRemindMinutes"
+    /// Otelden çıkıştan kaç dk önce hatırlatılsın. Varsayılan 15.
+    static var hotelRemindMinutes: Int {
+        UserDefaults.standard.object(forKey: hotelRemindKey) as? Int ?? 15
+    }
 }

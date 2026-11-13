@@ -138,7 +138,7 @@ struct LockScreenView: View {
             // 4) Sayaçlar                 RWY
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 if let leave = state.upcomingLeave() {
-                    Image(systemName: "house.fill").font(.caption2).foregroundStyle(.green)
+                    Image(systemName: state.isOutstation ? "building.2.fill" : "house.fill").font(.caption2).foregroundStyle(.green)
                     Countdown(target: leave)
                         .font(.subheadline.bold())
                         .foregroundStyle(.green)

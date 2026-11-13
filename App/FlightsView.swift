@@ -61,7 +61,7 @@ struct FlightsView: View {
                 } header: {
                     Text(L("Hızlı arama", "Quick search"))
                 } footer: {
-                    Text(L("Bilgi İGA CDM'den alınır. İmza = EOBT − 1:15.", "Data from İGA CDM. Sign-on = EOBT − 1:15."))
+                    Text(L("İstanbul kalkışı İGA CDM'den (imza = EOBT − 1:15), dış meydan kalkışı uçuş verisinden gelir.", "IST departures from İGA CDM (sign-on = EOBT − 1:15); outstation departures from flight data."))
                 }
 
                 // FAB'ın altında boşluk

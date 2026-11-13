@@ -28,6 +28,40 @@ enum NotificationManager {
             UNNotificationRequest(identifier: leaveID, content: content, trigger: trigger))
     }
 
+    /// Otelden çıkış hatırlatması (çıkıştan `minutesBefore` dk önce, uçak sesiyle).
+    static func scheduleHotel(flight: String, pickup: Date, minutesBefore: Int, timeZone: TimeZone) async {
+        cancelLeave()
+        let fire = pickup.addingTimeInterval(-Double(minutesBefore) * 60)
+        guard fire > Date() else { return }
+        await requestAuthorization()
+        var st = Date.FormatStyle.dateTime.hour().minute()
+        st.timeZone = timeZone
+        let content = UNMutableNotificationContent()
+        content.title = L("\(flight) – Otelden çıkış \(pickup.formatted(st))", "\(flight) – Hotel pickup \(pickup.formatted(st))")
+        content.body = minutesBefore > 0
+            ? L("Otelden çıkışa \(Display.minutes(minutesBefore)).", "\(Display.minutes(minutesBefore)) to hotel pickup.")
+            : L("Otelden çıkış vakti.", "Time for hotel pickup.")
+        content.sound = chime
+        content.interruptionLevel = .active
+        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: fire)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+        try? await UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: leaveID, content: content, trigger: trigger))
+    }
+
+    /// Duruma göre ev ya da otel bildirimini kurar.
+    static func scheduleFor(_ s: FlightAttributes.ContentState) async {
+        if s.isOutstation {
+            if let p = s.pickupAt {
+                await scheduleHotel(flight: s.flight, pickup: p, minutesBefore: AppSettings.hotelRemindMinutes, timeZone: s.originTimeZone)
+            } else { cancelLeave() }
+        } else if let leave = s.leaveAt {
+            await scheduleLeave(flight: s.flight, at: leave, minutesBeforeSignOn: AppSettings.leaveMinutes)
+        } else {
+            cancelLeave()
+        }
+    }
+
     static func cancelLeave() {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [leaveID])
     }

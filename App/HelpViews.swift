@@ -13,8 +13,8 @@ struct OnboardingView: View {
                 "Uçuş gathers the stand, registration, runway and times from İGA CDM in one place."),
               L("Kilit ekranında, Dynamic Island'da ve saatinde görürsün.",
                 "You see them on the Lock Screen, in the Dynamic Island and on your watch."),
-              L("Şimdilik sadece İstanbul Havalimanı (IST) kalkışlı uçuşlarda çalışır.",
-                "For now it works only for flights departing Istanbul Airport (IST).")]),
+              L("Dış meydandan kalkışta imza ve otelden çıkışı sen girersin, uygulama sayar ve hatırlatır.",
+                "For outstation departures you enter sign-on and hotel pickup; the app counts down and reminds you.")]),
             ("list.bullet.rectangle", .blue, L("Uçuşlarını ekle", "Add your flights"),
              [L("Uçuşlarım sekmesinde + ile tarih ve sefer numarası gir.",
                 "In My Flights, tap + and enter the date and flight number."),
@@ -114,10 +114,14 @@ struct HelpView: View {
     var body: some View {
         List {
             Section(L("Hangi uçuşlar?", "Which flights?")) {
-                bullet(L("Uygulama İstanbul Havalimanı'nın (IST) CDM sistemini kullanır; bu yüzden şimdilik sadece IST kalkışlı uçuşlarda çalışır. Dış meydandan kalkan seferler (ör. dönüş seferi) CDM'de görünmez.",
-                         "The app uses Istanbul Airport's (IST) CDM system, so for now it works only for IST departures. Flights departing outstations (e.g. the return leg) don't appear in CDM."))
-                bullet(L("Varış meydanının havası, pist rüzgârı ve dönüş seferi saatleri yine gösterilir.",
-                         "Destination weather, runway wind and return flight times are still shown."))
+                bullet(L("İstanbul kalkışı (gidiş-dönüş ya da yatılı): stand, pist, SID ve saatler İGA CDM'den gelir.",
+                         "Istanbul departures (round trip or layover): stand, runway, SID and times come from İGA CDM."))
+                bullet(L("Yatılı uçuş: aynı gün dönüş bulunmazsa tur varışta biter, dönüş adımları çıkmaz; kilit ekranı inişten 30 dk sonra kapanır.",
+                         "Layover: if no same-day return is found, the trip ends at arrival with no return steps; the Lock Screen closes 30 min after landing."))
+                bullet(L("Dış meydan kalkışı (ör. Beyrut → İstanbul): CDM yok; kalkış saati, tescil, gate ve varış uçuş verisinden gelir. Uygulama bunu kendisi anlar.",
+                         "Outstation departure (e.g. Beirut → Istanbul): no CDM; departure time, registration, gate and arrival come from flight data. The app detects this itself."))
+                bullet(L("Dış meydanda Bugün ekranından otelden çıkış, imza ve standı girersin (meydanın yerel saatiyle). Otel sayacı ve hatırlatma bunlara göre çalışır; imza girilmezse kalkış − 1 sa tahmini gösterilir.",
+                         "At an outstation, set hotel pickup, sign-on and stand on the Today screen (in local time). The hotel countdown and reminder follow them; without a sign-on, departure − 1 h is shown as an estimate."))
             }
             Section(L("Uçuş ekleme", "Adding flights")) {
                 bullet(L("Uçuşlarım sekmesinde + → tarih (UTC, roster'daki gibi) ve sefer numarası (1751 ya da TK1751).",

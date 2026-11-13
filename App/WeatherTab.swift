@@ -7,6 +7,7 @@ struct WeatherTab: View {
     @State private var items: [AirportWeather] = []
     @State private var selected = "LTFM"
     @State private var loading = false
+    @State private var pickedByUser = false
 
     var body: some View {
         NavigationStack {
@@ -15,7 +16,7 @@ struct WeatherTab: View {
                     let airports = FlightHelpers.airports(s)
                     VStack(spacing: 12) {
                         if airports.count > 1 {
-                            Picker(L("Meydan", "Airport"), selection: $selected) {
+                            Picker(L("Meydan", "Airport"), selection: Binding(get: { selected }, set: { selected = $0; pickedByUser = true })) {
                                 ForEach(airports, id: \.self) { icao in
                                     Text(label(icao, s)).tag(icao)
                                 }
@@ -26,8 +27,8 @@ struct WeatherTab: View {
                         if let w = items.first(where: { $0.icao == selected }) {
                             metarCard(w)
                             RunwayWindCard(weather: w,
-                                           active: selected == "LTFM" ? s.runway : "",
-                                           history: selected == "LTFM" ? [] : (s.turn?.destRunwayHistory ?? []))
+                                           active: selected == (s.origin ?? "LTFM") ? s.runway : "",
+                                           history: s.isOutstation || selected == "LTFM" ? [] : (s.turn?.destRunwayHistory ?? []))
                                 .id(w.icao)
                             if let taf = w.taf {
                                 tafCard(taf, events: FlightHelpers.weatherEvents(s)[w.icao] ?? [])
@@ -45,7 +46,7 @@ struct WeatherTab: View {
                         loading = true
                         let r = await WeatherService.fetch(airports)
                         if !r.isEmpty { items = r }
-                        if !airports.contains(selected) { selected = "LTFM" }
+                        if !airports.contains(selected) || (s.isOutstation && selected == "LTFM" && !pickedByUser) { selected = airports.first ?? "LTFM" }
                         loading = false
                     }
                 } else {
@@ -61,6 +62,7 @@ struct WeatherTab: View {
 
     private func label(_ icao: String, _ s: FlightAttributes.ContentState) -> String {
         if icao == "LTFM" { return "LTFM · İstanbul" }
+        if icao == s.origin, let c = s.originCity, !c.isEmpty { return "\(icao) · \(c)" }
         if let t = s.turn, t.destICAO == icao, !t.destCity.isEmpty { return "\(icao) · \(t.destCity)" }
         if let c = AirportDB.city(s.destination), AirportDB.icao(s.destination) == icao { return "\(icao) · \(c)" }
         return icao

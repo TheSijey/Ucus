@@ -41,7 +41,7 @@ final class AppModel: ObservableObject {
         defer { loading = false }
         do {
             let q = CDMFetcher.normalize(raw)
-            let state = try await FlightLoader.load(query: raw)
+            let state = try await FlightLoader.load(query: raw, plannedDay: plannedDay)
             if let plannedDay {
                 let departure = state.eobt ?? state.signOn.addingTimeInterval(CDMParser.signOnBeforeEOBT)
                 let cal = UTC.calendar
@@ -96,6 +96,27 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Dış meydan: elle girilen imza / otelden çıkış / stand kaydedilir ve takip güncellenir.
+    func saveManual(_ e: ManualTimes.Entry) async {
+        guard let s = session.state, s.isOutstation else { return }
+        ManualTimes.save(e, for: s)
+        var state = s
+        if let so = e.signOn {
+            state.signOn = so
+            state.signOnManual = true
+        } else {
+            if let dep = s.eobt { state.signOn = dep.addingTimeInterval(-3600) }
+            state.signOnManual = false
+        }
+        state.pickupAt = e.pickup
+        state.stand = e.stand ?? ""
+        do {
+            try await LiveActivityManager.start(query: session.query, state: state)
+        } catch {
+            await LiveActivityManager.apply(state)
+        }
+    }
+
     func remove() async {
         await LiveActivityManager.endAll(reason: "Kaldır butonu")
         refreshNote = nil
@@ -118,6 +139,14 @@ enum FlightHelpers {
     /// varışta iniş (yeşil) ve dönüş kalkışı (mavi).
     static func weatherEvents(_ s: FlightAttributes.ContentState) -> [String: [WeatherEvent]] {
         var ev: [String: [WeatherEvent]] = [:]
+        if let o = s.origin {
+            // Dış meydan → İstanbul: kalkış meydanında kalkış, İstanbul'da iniş
+            if let dep = s.departureTime { ev[o] = [WeatherEvent(label: L("Kalkış", "Departure"), time: dep, isReturn: false)] }
+            if let a = s.turn?.outboundArrival, let d = s.turn?.destICAO, !d.isEmpty {
+                ev[d] = [WeatherEvent(label: L("İniş", "Landing"), time: a, isReturn: false)]
+            }
+            return ev
+        }
         var ist: [WeatherEvent] = []
         if let dep = s.tsat ?? s.tobt ?? s.eobt { ist.append(WeatherEvent(label: L("Kalkış", "Departure"), time: dep, isReturn: false)) }
         if let t = s.turn {
@@ -132,7 +161,8 @@ enum FlightHelpers {
     }
 
     static func airports(_ s: FlightAttributes.ContentState) -> [String] {
-        ["LTFM"] + [destICAO(s)].compactMap { $0 }.filter { !$0.isEmpty }
+        if let o = s.origin { return [o] + [destICAO(s)].compactMap { $0 }.filter { !$0.isEmpty && $0 != o } }
+        return ["LTFM"] + [destICAO(s)].compactMap { $0 }.filter { !$0.isEmpty }
     }
 
     /// Varış meydanı ICAO: dönüş bilgisinden, yoksa CDM'deki varış kodundan (BEY → OLBA).
@@ -154,6 +184,14 @@ enum FlightHelpers {
         let counts = Dictionary(list.map { ($0, 1) }, uniquingKeysWith: +)
         let best = counts.values.max() ?? 0
         return list.first { counts[$0] == best }
+    }
+
+    /// Meydanın yerel saatiyle "06:30".
+    static func local(_ d: Date, _ tz: TimeZone) -> String {
+        var st = Date.FormatStyle.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)
+        st.timeZone = tz
+        st.locale = Locale(identifier: "en_GB")
+        return d.formatted(st)
     }
 
     static func hm(_ d: Date?) -> String { d.map { $0.formatted(.dateTime.hour().minute()) } ?? "—" }

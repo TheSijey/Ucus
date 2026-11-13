@@ -5,6 +5,9 @@ struct TodayView: View {
     @EnvironmentObject var model: AppModel
     @ObservedObject var session = FlightSession.shared
     @State private var weather: [AirportWeather] = []
+    @State private var editing: ManualField?
+
+    enum ManualField: String, Identifiable { case pickup, signOn, stand; var id: String { rawValue } }
 
     var body: some View {
         NavigationStack {
@@ -12,6 +15,7 @@ struct TodayView: View {
                 if let s = session.state {
                     VStack(spacing: 12) {
                         hero(s)
+                        if s.isOutstation { manualCard(s) }
                         highlightsBanner
                         tiles(s)
                         inboundRow(s)
@@ -35,7 +39,46 @@ struct TodayView: View {
             .navigationTitle(L("Bugün", "Today"))
             .toolbar { CommonToolbar() }
             .refreshable { await model.refresh() }
+            .sheet(item: $editing) { field in
+                if let s = session.state { ManualEditSheet(state: s, field: field).environmentObject(model) }
+            }
         }
+    }
+
+    // MARK: Dış meydan: elle girilenler
+
+    private func manualCard(_ s: FlightAttributes.ContentState) -> some View {
+        Card(padding: 12) {
+            VStack(spacing: 0) {
+                manualRow(icon: "building.2.fill", color: Palette.outbound, title: L("Otelden çıkış", "Hotel pickup"),
+                          value: s.pickupAt.map { FlightHelpers.local($0, s.originTimeZone) } ?? L("Gir", "Set"), field: .pickup)
+                Divider().overlay(Color.white.opacity(0.08))
+                manualRow(icon: "signature", color: Palette.signOn, title: L("İmza", "Sign-on"),
+                          value: (s.signOnManual == true ? "" : "~") + FlightHelpers.local(s.signOn, s.originTimeZone)
+                              + (s.signOnManual == true ? "" : L(" (tahmini, gir)", " (est., set)")), field: .signOn)
+                Divider().overlay(Color.white.opacity(0.08))
+                manualRow(icon: "parkingsign", color: Palette.stand, title: "Stand",
+                          value: s.stand.isEmpty ? L("Gir", "Set") : s.stand, field: .stand)
+                Text(L("Saatler \(s.originCity ?? s.originCode) yerel saatidir.", "Times are local to \(s.originCity ?? s.originCode)."))
+                    .font(.caption2).foregroundStyle(Palette.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
+            }
+        }
+    }
+
+    private func manualRow(icon: String, color: Color, title: String, value: String, field: ManualField) -> some View {
+        Button { editing = field } label: {
+            HStack {
+                Image(systemName: icon).foregroundStyle(color).frame(width: 22)
+                Text(title).font(.subheadline)
+                Spacer()
+                Text(value).font(.subheadline.bold().monospacedDigit()).foregroundStyle(color)
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.secondary)
+            }
+            .padding(.vertical, 9)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Parçalar
@@ -44,7 +87,7 @@ struct TodayView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(s.flight) → \(s.turn?.destIATA.isEmpty == false ? s.turn!.destIATA : Display.text(s.destination))")
+                    Text((s.isOutstation ? "\(s.flight) \(s.originCode) → " : "\(s.flight) → ") + (s.turn?.destIATA.isEmpty == false ? s.turn!.destIATA : Display.text(s.destination)))
                         .font(.title2.bold())
                     Text([s.registration, s.aircraftType, s.turn?.destCity ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.subheadline).foregroundStyle(.white.opacity(0.75))
@@ -58,7 +101,7 @@ struct TodayView: View {
             }
             HStack(spacing: 10) {
                 if let leave = s.upcomingLeave() {
-                    counter(title: L("Evden çıkışa", "Leave home"), target: leave, color: Palette.outbound)
+                    counter(title: s.isOutstation ? L("Otelden çıkışa", "Hotel pickup") : L("Evden çıkışa", "Leave home"), target: leave, color: Palette.outbound)
                 }
                 let next = nextEvent(s)
                 counter(title: next.title, target: next.date, color: next.color)
@@ -129,11 +172,22 @@ struct TodayView: View {
         }
     }
 
-    private func tiles(_ s: FlightAttributes.ContentState) -> some View {
+    private func tiles(_ s: FlightAttributes.ContentState) -> AnyView {
         let cols = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
         let dest = s.turn.flatMap { FlightHelpers.destGate($0) }
         let destCode = s.turn.map { $0.destIATA.isEmpty ? $0.destICAO : $0.destIATA } ?? L("Varış", "Arrival")
-        return LazyVGrid(columns: cols, spacing: 8) {
+        if s.isOutstation {
+            return AnyView(LazyVGrid(columns: cols, spacing: 8) {
+                Tile(title: "Gate", value: s.gate)
+                Tile(title: L("Pist", "Runway"), value: s.runway)
+                Tile(title: L("Kalkış", "Departure"), value: s.eobt.map { FlightHelpers.local($0, s.originTimeZone) } ?? "")
+                Tile(title: L("Varış", "Arrival"), value: s.turn?.outboundArrival.map { FlightHelpers.hm($0) } ?? "")
+                Tile(title: L("Süre", "Block"), value: FlightHelpers.duration(s.eobt, s.turn?.outboundArrival) ?? "")
+                Tile(title: L("Tescil", "Reg"), value: s.registration)
+            }
+            .onTapGesture { model.tab = .tour })
+        }
+        return AnyView(LazyVGrid(columns: cols, spacing: 8) {
             Tile(title: "Gate", value: s.gate)
             Tile(title: L("Pist", "Runway"), value: s.runway)
             Tile(title: "TOBT", value: s.tobt.map { FlightHelpers.hm($0) } ?? "")
@@ -141,7 +195,7 @@ struct TodayView: View {
             Tile(title: "CTOT", value: s.ctot.map { FlightHelpers.hm($0) } ?? "")
             Tile(title: "\(destCode) " + L("kapı", "gate"), value: dest.map { $0.isEstimate ? "~\($0.gate)" : $0.gate } ?? "")
         }
-        .onTapGesture { model.tab = .tour }
+        .onTapGesture { model.tab = .tour })
     }
 
     @ViewBuilder

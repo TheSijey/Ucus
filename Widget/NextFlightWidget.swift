@@ -198,7 +198,7 @@ struct NextFlightView: View {
         VStack(alignment: .leading, spacing: 1) {
             if let leave = a.leaveAt, leave > Date() {
                 HStack(spacing: 3) {
-                    Image(systemName: "house.fill").font(.caption2)
+                    Image(systemName: a.outstation == true ? "building.2.fill" : "house.fill").font(.caption2)
                     Countdown(target: leave)
                 }
                 .foregroundStyle(.green)

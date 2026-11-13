@@ -19,9 +19,10 @@ struct TourView: View {
                         .padding(.bottom, 18)
 
                         if let ib = s.freshInbound { inboundStep(ib) }
+                        if s.isOutstation, let p = s.pickupAt { pickupStep(s, p) }
                         signOnStep(s)
                         outboundStep(s)
-                        destinationStep(s)
+                        if !s.isOutstation { destinationStep(s) }
                         if let t = s.turn, t.returnFlight != nil { returnStep(t) }
                         endStep(s)
                     }
@@ -69,16 +70,40 @@ struct TourView: View {
         }
     }
 
+    /// Dış meydan: meydanın yerel saati ("06:30 BEY yerel").
+    private func stationLocal(_ s: FlightAttributes.ContentState, _ d: Date?) -> String {
+        guard let d else { return "" }
+        return L("\(FlightHelpers.local(d, s.originTimeZone)) \(s.originCode) yerel", "\(FlightHelpers.local(d, s.originTimeZone)) \(s.originCode) local")
+    }
+
+    private func pickupStep(_ s: FlightAttributes.ContentState, _ p: Date) -> some View {
+        Step(dot: .filled(Palette.outbound), line: .thin) {
+            Text(L("Otelden çıkış", "Hotel pickup") + " · \(s.originCity ?? s.originCode)").font(.caption).foregroundStyle(Palette.secondary)
+            Text(t(p)).font(.title3.bold())
+            Text(stationLocal(s, p)).font(.footnote).foregroundStyle(.white.opacity(0.75))
+        }
+    }
+
     private func signOnStep(_ s: FlightAttributes.ContentState) -> some View {
         Step(dot: .filled(Palette.signOn), line: .thin) {
-            Text(L("İmza · İstanbul", "Sign-on · Istanbul")).font(.caption).foregroundStyle(Palette.secondary)
-            Text(t(s.signOn)).font(.title3.bold())
-            VStack(alignment: .leading, spacing: 2) {
-                if let leave = s.leaveAt { Text(L("Evden çıkış", "Leave home") + " \(t(leave))") }
-                Text("EOBT \(t(s.eobt)) · TOBT \(t(s.tobt))")
-                if s.tsat != nil || s.ctot != nil { Text("TSAT \(t(s.tsat)) · CTOT \(t(s.ctot))") }
+            if s.isOutstation {
+                Text(L("İmza", "Sign-on") + " · \(s.originCity ?? s.originCode)").font(.caption).foregroundStyle(Palette.secondary)
+                Text((s.signOnManual == true ? "" : "~") + t(s.signOn)).font(.title3.bold())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(stationLocal(s, s.signOn) + (s.signOnManual == true ? "" : L(" · tahmini (Bugün'den gir)", " · estimate (set it in Today)")))
+                    Text("STD \(t(s.eobt))")
+                }
+                .font(.footnote).foregroundStyle(.white.opacity(0.75))
+            } else {
+                Text(L("İmza · İstanbul", "Sign-on · Istanbul")).font(.caption).foregroundStyle(Palette.secondary)
+                Text(t(s.signOn)).font(.title3.bold())
+                VStack(alignment: .leading, spacing: 2) {
+                    if let leave = s.leaveAt { Text(L("Evden çıkış", "Leave home") + " \(t(leave))") }
+                    Text("EOBT \(t(s.eobt)) · TOBT \(t(s.tobt))")
+                    if s.tsat != nil || s.ctot != nil { Text("TSAT \(t(s.tsat)) · CTOT \(t(s.ctot))") }
+                }
+                .font(.footnote).foregroundStyle(.white.opacity(0.75))
             }
-            .font(.footnote).foregroundStyle(.white.opacity(0.75))
         }
     }
 
@@ -87,10 +112,10 @@ struct TourView: View {
         let dest = s.turn.map { $0.destIATA.isEmpty ? $0.destICAO : $0.destIATA } ?? s.destination
         return Step(dot: .filled(Palette.outbound), line: .thick(Palette.outbound)) {
             Text(L("Gidiş", "Outbound") + " · \(s.flight)").font(.caption).foregroundStyle(Palette.outbound)
-            Text("IST \(t(dep)) → \(Display.text(dest)) \(t(s.turn?.outboundArrival))").font(.title3.bold())
+            Text("\(s.originCode) \(t(dep)) → \(Display.text(dest)) \(t(s.turn?.outboundArrival))").font(.title3.bold())
             HStack(spacing: 8) {
                 Tile(title: "Stand", value: s.stand, color: Palette.stand)
-                Tile(title: L("Pist", "Runway"), value: s.runway)
+                if s.isOutstation { Tile(title: "Gate", value: s.gate) } else { Tile(title: L("Pist", "Runway"), value: s.runway) }
                 Tile(title: L("Süre", "Block"), value: FlightHelpers.duration(dep, s.turn?.outboundArrival) ?? "")
             }
         }
@@ -143,12 +168,16 @@ struct TourView: View {
 
     private func endStep(_ s: FlightAttributes.ContentState) -> some View {
         Step(dot: .filled(.white), line: .none) {
-            Text(L("Görev sonu · İstanbul", "Duty end · Istanbul")).font(.caption).foregroundStyle(Palette.secondary)
+            let endCity = s.isOneWay ? (s.turn.map { $0.destCity.isEmpty ? $0.destIATA : $0.destCity } ?? s.destination) : "İstanbul"
+            Text(L("Görev sonu", "Duty end") + " · \(endCity)" + (s.isOneWay && !s.isOutstation ? L(" (yatılı)", " (layover)") : ""))
+                .font(.caption).foregroundStyle(Palette.secondary)
             Text(t(s.turn?.returnArrival ?? s.turn?.outboundArrival)).font(.title3.bold())
-            if let total = FlightHelpers.duration(s.signOn, s.turn?.returnArrival) {
+            if let total = FlightHelpers.duration(s.signOn, s.turn?.returnArrival ?? s.turn?.outboundArrival) {
                 Text(L("İmzadan itibaren", "Since sign-on") + " \(total)").font(.footnote).foregroundStyle(.white.opacity(0.75))
             }
-            Text(L("Uçuş, uygulamada ve kilit ekranında bu saate kadar kalır (Ada'dan imza + 30 dk'da kalkar).", "The flight stays in the app and on the Lock Screen until this time (leaves the Dynamic Island at sign-on + 30 min)."))
+            Text(s.isOneWay
+                 ? L("Uçuş, uygulamada ve kilit ekranında inişten 30 dk sonrasına kadar kalır (Ada'dan imza + 30 dk'da kalkar).", "The flight stays in the app and on the Lock Screen until 30 min after landing (leaves the Dynamic Island at sign-on + 30 min).")
+                 : L("Uçuş, uygulamada ve kilit ekranında bu saate kadar kalır (Ada'dan imza + 30 dk'da kalkar).", "The flight stays in the app and on the Lock Screen until this time (leaves the Dynamic Island at sign-on + 30 min)."))
                 .font(.caption2).foregroundStyle(Palette.secondary).padding(.top, 4)
         }
     }

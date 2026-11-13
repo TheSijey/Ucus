@@ -60,10 +60,14 @@ enum LiveActivityManager {
     static func start(query: String, state input: FlightAttributes.ContentState) async throws {
         await endAll(reason: "yeni uçuş eklendi", clearSession: false)
         var state = input
-        // Aynı uçuş daha önce eklendiyse ve EOBT öne çekildiyse eski (daha geç) imza kalır.
-        state.signOn = SignOnMemory.resolve(flight: state.flight, newSignOn: state.signOn)
-        let minutes = AppSettings.leaveMinutes
-        state.leaveAt = SignOnMemory.leave(for: state.signOn, minutes: minutes)
+        if state.isOutstation {
+            // Dış meydan: imza ve otelden çıkış elle girilir; sayaç otelden çıkışa kadar
+            state.leaveAt = state.pickupAt.flatMap { $0 > Date() ? $0 : nil }
+        } else {
+            // Aynı uçuş daha önce eklendiyse ve EOBT öne çekildiyse eski (daha geç) imza kalır.
+            state.signOn = SignOnMemory.resolve(flight: state.flight, newSignOn: state.signOn)
+            state.leaveAt = SignOnMemory.leave(for: state.signOn, minutes: AppSettings.leaveMinutes)
+        }
 
         FlightSession.shared.set(query: query, state: state)
         if Date() < state.hideAt {
@@ -73,11 +77,7 @@ enum LiveActivityManager {
         }
         DebugLog.add("Başlatıldı \(state.flight) · imza \(state.signOn.formatted(.dateTime.hour().minute())) · stand \(state.stand)")
 
-        if let leave = state.leaveAt {
-            await NotificationManager.scheduleLeave(flight: state.flight, at: leave, minutesBeforeSignOn: minutes)
-        } else {
-            NotificationManager.cancelLeave()
-        }
+        await NotificationManager.scheduleFor(state)
         scheduleNextWake()
         WidgetSync.push()
     }
@@ -157,21 +157,23 @@ enum FlightRefresher {
         }
         DebugLog.add("Yenile başladı \(old.flight)")
         do {
-            var state = try await FlightLoader.load(query: session.query)
-            state.signOn = max(old.signOn, state.signOn)
-            SignOnMemory.remember(flight: state.flight, signOn: state.signOn)
+            var state = try await FlightLoader.load(query: session.query, plannedDay: old.isOutstation ? old.eobt : nil,
+                                                    outstation: old.isOutstation)
+            if state.isOutstation {
+                // İmza elle girilmediyse kalkış öne çekilince eski (geç) tahmin kalır
+                if state.signOnManual != true { state.signOn = max(old.signOn, state.signOn) }
+                if state.registration.isEmpty { state.registration = old.registration }
+                state.leaveAt = state.pickupAt.flatMap { $0 > Date() ? $0 : nil }
+            } else {
+                state.signOn = max(old.signOn, state.signOn)
+                SignOnMemory.remember(flight: state.flight, signOn: state.signOn)
+                state.leaveAt = SignOnMemory.leave(for: state.signOn, minutes: AppSettings.leaveMinutes)
+            }
             // CDM uçuş kalktıktan sonra bilgi vermeyebilir: boş gelenleri eskiden koru
             if state.turn == nil { state.turn = old.turn }
             if state.inbound == nil { state.inbound = old.inbound }
-
-            let minutes = AppSettings.leaveMinutes
-            state.leaveAt = SignOnMemory.leave(for: state.signOn, minutes: minutes)
-            if state.leaveAt != old.leaveAt {
-                if let leave = state.leaveAt {
-                    await NotificationManager.scheduleLeave(flight: state.flight, at: leave, minutesBeforeSignOn: minutes)
-                } else {
-                    NotificationManager.cancelLeave()
-                }
+            if state.leaveAt != old.leaveAt || state.pickupAt != old.pickupAt {
+                await NotificationManager.scheduleFor(state)
             }
             await LiveActivityManager.apply(state)
             DebugLog.add("Yenile tamam · stand \(state.stand) · imza \(state.signOn.formatted(.dateTime.hour().minute()))")
