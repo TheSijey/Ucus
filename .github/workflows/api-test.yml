@@ -13,11 +13,11 @@ jobs:
           REG: TC-LTD
         run: |
           echo "Anahtar uzunluğu: ${#KEY}"
-          for r in "$REG/$(date -u +%F)"; do
-            echo "=== /flights/reg/$r"
+          for r in "reg/$REG/$(date -u +%F)" "number/TK1751/$(date -u +%F)" "number/TK1752/$(date -u +%F)"; do
+            echo "=== /flights/$r"
             curl -s -o out.json -w "HTTP %{http_code}\n" \
               -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
-              "https://aerodatabox.p.rapidapi.com/flights/reg/$r?withAircraftImage=false&withLocation=false"
+              "https://aerodatabox.p.rapidapi.com/flights/$r?withAircraftImage=false&withLocation=false"
             jq -r '.[] | "\(.number) \(.departure.airport.icao)->\(.arrival.airport.icao) dep \(.departure.scheduledTime.utc) arr \(.arrival.scheduledTime.utc) rwyT \(.arrival.runwayTime.utc // "-") rev \(.arrival.revisedTime.utc // "-") \(.status)"' out.json
           done
       - name: aviationweather airport
