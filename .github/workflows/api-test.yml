@@ -5,32 +5,14 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    environment: APPLE_TEAM_ID
     steps:
-      - name: IATA -> ICAO tablosu
+      - name: Dış meydan kalkışı örnekleri
+        env:
+          KEY: ${{ secrets.RAPIDAPI_KEY }}
         run: |
-          curl -sL https://davidmegginson.github.io/ourairports-data/airports.csv -o airports.csv
-          python3 - <<'PY'
-          import csv, json
-          out = {}
-          for r in csv.DictReader(open('airports.csv', encoding='utf-8')):
-              if r['type'] not in ('large_airport', 'medium_airport'): continue
-              iata = r['iata_code'].strip(); icao = (r.get('icao_code') or r['gps_code']).strip()
-              if len(iata) == 3 and len(icao) == 4 and icao.isalpha():
-                  if iata not in out or r['type'] == 'large_airport':
-                      out[iata] = [icao, r['municipality'].strip()]
-          json.dump(out, open('iata.json', 'w'), ensure_ascii=False, separators=(',', ':'), sort_keys=True)
-          print(len(out), out.get('BEY'), out.get('LUX'), out.get('BER'), out.get('COV'))
-          PY
-          ls -la iata.json
-      - uses: actions/checkout@v4
-        with:
-          path: repo
-      - name: Tabloyu dala yaz
-        run: |
-          cp iata.json repo/iata.json
-          cd repo
-          git config user.name ci; git config user.email ci@example.com
-          git add iata.json; git commit -m "iata.json [skip ci]" || true
-          git push
+          for q in TK829/2026-11-14 TK1356/2026-11-13; do
+            curl -s -o o.json -w "http=%{http_code}\n" -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
+              "https://aerodatabox.p.rapidapi.com/flights/number/$q?withAircraftImage=false&withLocation=false"
+            echo "== $q"; jq -c '.[0] | {number, status, aircraft, departure: (.departure|{airport:(.airport|{icao,iata,name,municipalityName,timeZone}),scheduledTime,revisedTime,gate,terminal,runway}), arrival: (.arrival|{airport:(.airport|{icao,iata,municipalityName,timeZone}),scheduledTime,revisedTime,predictedTime,gate})}' o.json || head -c 300 o.json
+          done
