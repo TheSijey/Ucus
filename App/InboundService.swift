@@ -149,23 +149,74 @@ enum AeroDataBox {
         return nil
     }
 
-    /// Aynı tescil için 2 dk içinde tekrar istek atmaz (gelen uçak ve dönüş aynı yanıtı kullanır).
+    /// Aynı tescil ve günler için 10 dk içinde tekrar istek atmaz (geliş, gidiş ve dönüş aynı listeyi kullanır).
     private static var flightsCache: [String: (date: Date, flights: [Flight])] = [:]
 
-    private static func loadFlights(_ registration: String) async -> [Flight]? {
-        if let c = flightsCache[registration], Date().timeIntervalSince(c.date) < 120 { return c.flights }
-        guard let key = InboundService.rapidKey else { return nil }
-        let reg = registration.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? registration
-        guard let url = URL(string: "https://aerodatabox.p.rapidapi.com/flights/reg/\(reg)?withAircraftImage=false&withLocation=false") else { return nil }
+    /// Uçağın kalkış gününe (İstanbul saati) ait tüm uçuşları; sabah erken kalkışta önceki gün,
+    /// öğleden sonra kalkışta ertesi gün de eklenir (gelen uçak / gece dönüşü için).
+    private static func loadFlights(_ registration: String, around: Date?) async -> [Flight]? {
+        guard InboundService.rapidKey != nil else { return nil }
+        let ref = around ?? Date()
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Europe/Istanbul")!
+        let hour = cal.component(.hour, from: ref)
+        var days = [ref]
+        if hour < 9, let d = cal.date(byAdding: .day, value: -1, to: ref) { days.insert(d, at: 0) }
+        if hour >= 12, let d = cal.date(byAdding: .day, value: 1, to: ref) { days.append(d) }
+        let fmt = DateFormatter()
+        fmt.calendar = cal
+        fmt.timeZone = cal.timeZone
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.dateFormat = "yyyy-MM-dd"
+        let dayStrings = days.map { fmt.string(from: $0) }
+
+        let cacheKey = registration + "|" + dayStrings.joined(separator: ",")
+        if let c = flightsCache[cacheKey], Date().timeIntervalSince(c.date) < 600 { return c.flights }
+
+        var all: [Flight] = []
+        var anyOK = false
+        for day in dayStrings {
+            if let list = await request(path: "flights/reg/\(registration)/\(day)") {
+                anyOK = true
+                all += list
+            }
+        }
+        if !anyOK || all.isEmpty {
+            // Yedek: uçağın o anki uçuşu
+            if let list = await request(path: "flights/reg/\(registration)") { anyOK = true; all += list }
+        }
+        guard anyOK else { return nil }
+
+        // Aynı uçuş iki günde de gelebilir: sefer + planlanan kalkışa göre tekilleştir
+        var seen = Set<String>()
+        all = all.filter { f in
+            let k = "\(f.number ?? "")|\(f.departure?.scheduledTime?.utc ?? "")"
+            return seen.insert(k).inserted
+        }
+        flightsCache[cacheKey] = (Date(), all)
+        return all
+    }
+
+    private static func request(path: String) async -> [Flight]? {
+        guard let key = InboundService.rapidKey,
+              let url = URL(string: "https://aerodatabox.p.rapidapi.com/\(path)?withAircraftImage=false&withLocation=false")
+        else { return nil }
         var req = URLRequest(url: url)
         req.setValue(key, forHTTPHeaderField: "x-rapidapi-key")
         req.setValue("aerodatabox.p.rapidapi.com", forHTTPHeaderField: "x-rapidapi-host")
         req.timeoutInterval = 15
-
         guard let result = try? await URLSession.shared.data(for: req),
-              (result.1 as? HTTPURLResponse)?.statusCode == 200,
-              let flights = try? JSONDecoder().decode([Flight].self, from: result.0) else { return nil }
-        flightsCache[registration] = (Date(), flights)
+              let http = result.1 as? HTTPURLResponse else {
+            DebugLog.add("AeroDataBox \(path): bağlantı hatası")
+            return nil
+        }
+        if http.statusCode == 204 { return [] }
+        guard http.statusCode == 200,
+              let flights = try? JSONDecoder().decode([Flight].self, from: result.0) else {
+            let body = String(data: result.0.prefix(120), encoding: .utf8) ?? ""
+            DebugLog.add("AeroDataBox \(path): HTTP \(http.statusCode) \(body)")
+            return nil
+        }
         return flights
     }
 
@@ -181,8 +232,8 @@ enum AeroDataBox {
     }
 
     /// Bizim seferin varışı ve aynı uçağın İstanbul'a dönüş seferi.
-    static func turn(registration: String, flight: String) async -> TurnInfo? {
-        guard let flights = await loadFlights(registration.uppercased()) else { return nil }
+    static func turn(registration: String, flight: String, around: Date?) async -> TurnInfo? {
+        guard let flights = await loadFlights(registration.uppercased(), around: around) else { return nil }
         let ours = normFlight(flight)
         guard let out = flights.first(where: {
             normFlight($0.number ?? "") == ours && $0.departure?.airport?.icao == InboundService.airport
@@ -211,7 +262,7 @@ enum AeroDataBox {
     }
 
     static func fetch(registration: String, before departure: Date?, stand: String) async -> InboundInfo? {
-        guard let flights = await loadFlights(registration) else { return nil }
+        guard let flights = await loadFlights(registration.uppercased(), around: departure) else { return nil }
 
         let limit = departure ?? Date().addingTimeInterval(6 * 3600)
         func arrivalRef(_ f: Flight) -> Date? {
@@ -321,7 +372,7 @@ enum FlightLoader {
         state.inbound = await InboundService.fetch(registration: state.registration,
                                                    before: state.eobt, stand: state.stand)
         if InboundService.rapidKey != nil, !state.registration.isEmpty {
-            state.turn = await AeroDataBox.turn(registration: state.registration, flight: state.flight)
+            state.turn = await AeroDataBox.turn(registration: state.registration, flight: state.flight, around: state.eobt)
         }
         return state
     }
