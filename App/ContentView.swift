@@ -204,10 +204,13 @@ struct ContentView: View {
                 }
                 if let rf = t.returnFlight {
                     LabeledContent("Dönüş \(rf)") {
-                        HStack(spacing: 4) {
-                            if let d = t.returnDeparture { Text(d, format: .dateTime.hour().minute()) }
-                            Image(systemName: "arrow.right").font(.caption2)
-                            if let a = t.returnArrival { Text(a, format: .dateTime.hour().minute()) } else { Text("—") }
+                        VStack(alignment: .trailing, spacing: 1) {
+                            if let d = t.returnDeparture {
+                                Text("kalkış ") + Text(d, format: .dateTime.hour().minute()).bold()
+                            }
+                            if let a = t.returnArrival {
+                                Text("iniş ") + Text(a, format: .dateTime.hour().minute()).bold()
+                            }
                         }
                         .monospacedDigit()
                     }

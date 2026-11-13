@@ -26,12 +26,20 @@ struct FlightLiveActivity: Widget {
                         Text(s.flight).font(.title3.bold())
                         Text(Display.text(s.registration)).font(.headline).foregroundStyle(.secondary)
                     }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.leading, 10)
+                    .padding(.top, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text("STAND").font(.caption2).foregroundStyle(.secondary)
                         Text(Display.text(s.stand)).font(.title2.bold()).foregroundStyle(.cyan)
                     }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.trailing, 10)
+                    .padding(.top, 4)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack {
@@ -46,6 +54,9 @@ struct FlightLiveActivity: Widget {
                         .padding(.leading, 6)
                     }
                     .font(.subheadline.monospacedDigit())
+                    .lineLimit(1)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 4)
                 }
             } compactLeading: {
                 VStack(alignment: .leading, spacing: -1) {

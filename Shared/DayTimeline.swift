@@ -42,11 +42,14 @@ struct DayTimelineBar: View {
 
             if showLegend {
                 if compactLegend {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         legendItem(.green, data.outDep, data.outArr)
                         if data.retDep != nil { legendItem(.blue, data.retDep, data.retArr) }
                     }
                     .font(.caption2.monospacedDigit())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
                 } else {
                     VStack(alignment: .leading, spacing: 3) {
                         row(.gray, "İmza", data.signOn, nil, nil)
@@ -81,8 +84,9 @@ struct DayTimelineBar: View {
     private func legendItem(_ c: Color, _ a: Date?, _ b: Date?) -> some View {
         HStack(spacing: 3) {
             Circle().fill(c).frame(width: 6, height: 6)
-            Text("\(t(a))–\(t(b))")
+            Text("\(t(a))–\(t(b))").lineLimit(1)
         }
+        .layoutPriority(1)
     }
 
     private func row(_ c: Color, _ title: String, _ a: Date?, _ b: Date?, _ place: String?) -> some View {

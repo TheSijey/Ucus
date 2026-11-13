@@ -184,7 +184,7 @@ struct NextFlightView: View {
                     Spacer(minLength: 0)
                     if let tl = a.timeline {
                         DayTimelineBar(data: tl, height: 6, compactLegend: true)
-                            .frame(width: 150)
+                            .frame(width: 170)
                     }
                 }
             }
