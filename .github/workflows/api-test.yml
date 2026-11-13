@@ -7,24 +7,39 @@ jobs:
     runs-on: ubuntu-latest
     environment: APPLE_TEAM_ID
     steps:
-      - name: AeroDataBox
+      - name: AeroDataBox - TK1305 son günler (varış gate)
         env:
           KEY: ${{ secrets.RAPIDAPI_KEY }}
-          REG: TC-LTD
         run: |
-          echo "Anahtar uzunluğu: ${#KEY}"
-          for r in "reg/$REG/$(date -u +%F)" "number/TK1751/$(date -u +%F)" "number/TK1752/$(date -u +%F)"; do
-            echo "=== /flights/$r"
-            curl -s -o out.json -w "HTTP %{http_code}\n" \
+          for d in 1 2 3 4; do
+            day=$(date -u -d "-$d day" +%F)
+            curl -s -o out.json -w "$day HTTP %{http_code}\n" \
               -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
-              "https://aerodatabox.p.rapidapi.com/flights/$r?withAircraftImage=false&withLocation=false"
-            jq -r '.[] | "\(.number) \(.departure.airport.icao)->\(.arrival.airport.icao) dep \(.departure.scheduledTime.utc) arr \(.arrival.scheduledTime.utc) rwyT \(.arrival.runwayTime.utc // "-") rev \(.arrival.revisedTime.utc // "-") \(.status)"' out.json
+              "https://aerodatabox.p.rapidapi.com/flights/number/TK1305/$day?withAircraftImage=false&withLocation=false"
+            jq -r '.[] | "  \(.number) \(.departure.airport.icao)->\(.arrival.airport.icao) arrGate=\(.arrival.gate // "-") arrTerm=\(.arrival.terminal // "-") arrRwy=\(.arrival.runway // "-") on=\(.arrival.runwayTime.utc // "-") rev=\(.arrival.revisedTime.utc // "-") depGate(dönüş yok)  reg=\(.aircraft.reg // "-") hex=\(.aircraft.modeS // "-")"' out.json 2>/dev/null || head -c 300 out.json
+            echo "$(jq -r '.[0].aircraft.modeS // empty' out.json 2>/dev/null) $(jq -r '.[0].arrival.runwayTime.utc // .[0].arrival.revisedTime.utc // empty' out.json 2>/dev/null)" >> tracks.txt
           done
-      - name: aviationweather airport
+          cat tracks.txt
+      - name: OpenSky - yer izi (anonim)
         run: |
-          for id in ENGM OSL; do
-            echo "=== airport $id"
-            curl -s -w "\nHTTP %{http_code}\n" "https://aviationweather.gov/api/data/airport?ids=$id&format=json" | head -c 1500; echo
-          done
-          echo "=== metar ENGM"
-          curl -s "https://aviationweather.gov/api/data/metar?ids=ENGM&format=json" | head -c 800; echo
+          while read hex t; do
+            [ -z "$hex" ] && continue
+            ts=$(date -u -d "${t/Z/}" +%s 2>/dev/null) || continue
+            h=$(echo "$hex" | tr 'A-Z' 'a-z')
+            echo "=== $hex $t ($ts)"
+            curl -s -w "\nHTTP %{http_code}\n" "https://opensky-network.org/api/tracks/all?icao24=$h&time=$ts" -o tr.json
+            jq -r '"noktalar: \(.path|length), başlangıç \(.startTime), bitiş \(.endTime)"' tr.json 2>/dev/null || head -c 300 tr.json
+            # Malaga çevresi (36.67N, -4.49E) yerdeki noktalar (on_ground=true)
+            jq -r '[.path[] | select(.[5]==true)] | "yerde nokta: \(length)"' tr.json 2>/dev/null
+            jq -r '[.path[] | select(.[5]==true)] | .[0:5][] | @csv' tr.json 2>/dev/null
+          done < tracks.txt
+      - name: OpenStreetMap - Malaga taksi yolları
+        run: |
+          q='[out:json][timeout:25];way["aeroway"="taxiway"](36.64,-4.53,36.70,-4.46);out tags;'
+          curl -s --data-urlencode "data=$q" https://overpass-api.de/api/interpreter -o osm.json -w "HTTP %{http_code}\n"
+          jq -r '"taksi yolu parçası: \(.elements|length)"' osm.json
+          jq -r '[.elements[].tags.ref // empty] | unique | join(", ")' osm.json
+          q2='[out:json][timeout:25];(node["aeroway"="parking_position"](36.64,-4.53,36.70,-4.46);node["aeroway"="gate"](36.64,-4.53,36.70,-4.46););out tags;'
+          curl -s --data-urlencode "data=$q2" https://overpass-api.de/api/interpreter -o osm2.json
+          jq -r '"stand/gate noktası: \(.elements|length)"' osm2.json
+          jq -r '[.elements[].tags.ref // empty] | .[0:40] | join(", ")' osm2.json
