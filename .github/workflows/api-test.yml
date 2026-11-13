@@ -1,0 +1,33 @@
+name: API test
+on:
+  workflow_dispatch:
+    inputs:
+      reg:
+        description: "Tescil"
+        default: "TC-LTD"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    environment: APPLE_TEAM_ID
+    steps:
+      - name: AeroDataBox
+        env:
+          KEY: ${{ secrets.RAPIDAPI_KEY }}
+          REG: ${{ inputs.reg }}
+        run: |
+          echo "Anahtar uzunluğu: ${#KEY}"
+          for r in "$REG" "${REG//-/}"; do
+            echo "=== /flights/reg/$r"
+            curl -s -o out.json -w "HTTP %{http_code}\n" \
+              -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
+              "https://aerodatabox.p.rapidapi.com/flights/reg/$r?withAircraftImage=false&withLocation=false"
+            head -c 2500 out.json; echo
+          done
+      - name: aviationweather airport
+        run: |
+          for id in ENGM OSL; do
+            echo "=== airport $id"
+            curl -s -w "\nHTTP %{http_code}\n" "https://aviationweather.gov/api/data/airport?ids=$id&format=json" | head -c 1500; echo
+          done
+          echo "=== metar ENGM"
+          curl -s "https://aviationweather.gov/api/data/metar?ids=ENGM&format=json" | head -c 800; echo
