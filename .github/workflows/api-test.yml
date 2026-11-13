@@ -7,11 +7,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: APPLE_TEAM_ID
     steps:
-      - name: Dış meydan kalkışı örnekleri
+      - name: Kota kontrolü
         env:
           KEY: ${{ secrets.RAPIDAPI_KEY }}
         run: |
-          for q in TK829/2026-11-14 TK1356/2026-11-13; do
+          for q in TK829/2026-11-14; do
             curl -s -o o.json -w "http=%{http_code}\n" -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
               "https://aerodatabox.p.rapidapi.com/flights/number/$q?withAircraftImage=false&withLocation=false"
             echo "== $q"; jq -c '.[0] | {number, status, aircraft, departure: (.departure|{airport:(.airport|{icao,iata,name,municipalityName,timeZone}),scheduledTime,revisedTime,gate,terminal,runway}), arrival: (.arrival|{airport:(.airport|{icao,iata,municipalityName,timeZone}),scheduledTime,revisedTime,predictedTime,gate})}' o.json || head -c 300 o.json
