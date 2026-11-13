@@ -302,63 +302,51 @@ struct RunwayWindCard: View {
         .foregroundStyle(Palette.warn)
     }
 
-    /// Pilot görünümü: pist ortada yukarı doğru; karşı rüzgâr pistin ucundan, yan rüzgâr geldiği taraftan.
-    /// Her okun değeri hemen yanında yazar.
+    /// Pilot görünümü: pist yukarı doğru; oklar rüzgârın geldiği tarafta, pistin yanında.
+    /// Yeşil (karşı) / kırmızı (arka) ok piste paralel, turuncu yan rüzgâr oku piste dik; değerler okların yanında.
     private func drawing(_ c: RunwayWind, maxSpeed: Int) -> some View {
         let scale = CGFloat(max(maxSpeed, 1))
-        let headLen = max(12, CGFloat(abs(c.head)) / scale * 34)
-        let crossLen = max(12, CGFloat(c.cross) / scale * 40)
+        let headLen = max(16, CGFloat(abs(c.head)) / scale * 56)
+        let crossLen = max(16, CGFloat(c.cross) / scale * 56)
         let headColor = c.head >= 0 ? Palette.outbound : Color.red
-        let headLabel = label(abs(c.head), c.head >= 0 ? L("karşı", "head") : L("arka", "tail"),
-                              gust: c.gustHead.map { abs($0) }, color: headColor)
+        let fromLeft = c.cross > 0 && c.crossFromLeft
         let crossTitle = L("yan", "cross") + " · " + (c.crossFromLeft ? L("soldan", "from left") : L("sağdan", "from right"))
-        let runwayW: CGFloat = 26
 
-        return VStack(spacing: 4) {
-            if c.head > 0 {
-                HStack(alignment: .bottom, spacing: 10) {
-                    Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
-                    vArrow(down: true, length: headLen, color: headColor).frame(width: runwayW)
-                    headLabel.frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            HStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    if c.cross > 0, c.crossFromLeft {
-                        label(c.cross, crossTitle, gust: c.gustCross, color: Palette.warn, trailing: true)
-                        hArrow(right: true, length: crossLen)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                ZStack {
-                    RoundedRectangle(cornerRadius: 3).fill(Color(white: 0.24))
-                    Rectangle().fill(Color.white.opacity(0.6)).frame(width: 2).padding(.vertical, 16)
-                        .mask(VStack(spacing: 6) { ForEach(0..<7, id: \.self) { _ in Rectangle().frame(height: 6) } })
-                    VStack {
-                        Spacer()
-                        Text(c.runway).font(.system(size: 10, weight: .heavy)).foregroundStyle(.white).padding(.bottom, 3)
-                    }
-                }
-                .frame(width: runwayW, height: 90)
-                HStack(spacing: 8) {
-                    if c.cross > 0, !c.crossFromLeft {
-                        hArrow(right: false, length: crossLen)
-                        label(c.cross, crossTitle, gust: c.gustCross, color: Palette.warn)
-                    } else if c.cross == 0 {
-                        Text(L("yan rüzgâr yok", "no crosswind")).font(.subheadline).foregroundStyle(Palette.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            if c.head < 0 {
-                HStack(alignment: .top, spacing: 10) {
-                    Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
-                    vArrow(down: false, length: headLen, color: headColor).frame(width: runwayW)
-                    headLabel.frame(maxWidth: .infinity, alignment: .leading)
-                }
-            } else if c.head == 0 {
+        let headRow = HStack(spacing: 10) {
+            if c.head == 0 {
                 Text(L("karşı/arka rüzgâr yok", "no head/tailwind")).font(.subheadline).foregroundStyle(Palette.secondary)
+            } else {
+                let arrow = vArrow(down: c.head > 0, length: headLen, color: headColor)
+                let text = label(abs(c.head), c.head > 0 ? L("karşı", "head") : L("arka", "tail"),
+                                 gust: c.gustHead.map { abs($0) }, color: headColor, trailing: fromLeft)
+                if fromLeft { text; arrow } else { arrow; text }
             }
+        }
+        let crossRow = HStack(spacing: 8) {
+            if c.cross == 0 {
+                Text(L("yan rüzgâr yok", "no crosswind")).font(.subheadline).foregroundStyle(Palette.secondary)
+            } else {
+                let text = label(c.cross, crossTitle, gust: c.gustCross, color: Palette.warn, trailing: fromLeft)
+                if fromLeft { text; hArrow(right: true, length: crossLen) } else { hArrow(right: false, length: crossLen); text }
+            }
+        }
+        let side = VStack(alignment: fromLeft ? .trailing : .leading, spacing: 18) {
+            headRow
+            crossRow
+        }
+        let runway = ZStack {
+            RoundedRectangle(cornerRadius: 3).fill(Color(white: 0.24))
+            Rectangle().fill(Color.white.opacity(0.6)).frame(width: 2).padding(.vertical, 16)
+                .mask(VStack(spacing: 6) { ForEach(0..<9, id: \.self) { _ in Rectangle().frame(height: 6) } })
+            VStack {
+                Spacer()
+                Text(c.runway).font(.system(size: 10, weight: .heavy)).foregroundStyle(.white).padding(.bottom, 3)
+            }
+        }
+        .frame(width: 26, height: 130)
+
+        return HStack(spacing: 12) {
+            if fromLeft { side; runway } else { runway; side }
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
