@@ -112,67 +112,79 @@ struct LockScreenView: View {
     }
 
     private var fullView: some View {
-        VStack(alignment: .leading, spacing: state.inbound == nil ? 10 : 7) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(state.flight).font(.title3.bold())
+        VStack(alignment: .leading, spacing: 6) {
+            // 1) Sefer → varış            STAND C3
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(state.flight).font(.headline.bold())
                 if !state.destination.isEmpty {
-                    Image(systemName: "arrow.right").font(.caption)
-                    Text(state.destination).font(.title3.bold())
+                    Image(systemName: "arrow.right").font(.caption2)
+                    Text(state.destination).font(.headline.bold())
                 }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text("STAND").font(.caption2).foregroundStyle(.white.opacity(0.6))
-                    Text(Display.text(state.stand)).font(.title2.bold()).foregroundStyle(.cyan)
-                }
+                Spacer(minLength: 4)
+                Text("STAND").font(.caption2).foregroundStyle(.white.opacity(0.6))
+                Text(Display.text(state.stand)).font(.title2.bold()).foregroundStyle(.cyan)
             }
-            HStack {
-                Text(Display.text(state.registration)).font(.headline)
-                Text(state.aircraftType).font(.subheadline).foregroundStyle(.white.opacity(0.6))
+            // 2) Tescil tip               Gate
+            HStack(alignment: .firstTextBaseline) {
+                Text(Display.text(state.registration)).font(.subheadline.bold())
+                Text(state.aircraftType).font(.caption).foregroundStyle(.white.opacity(0.6))
                 Spacer()
-                Text("Gate \(Display.text(state.gate))").font(.subheadline).foregroundStyle(.white.opacity(0.8))
+                Text("Gate \(Display.text(state.gate))").font(.caption).foregroundStyle(.white.opacity(0.8))
             }
+            // 3) Geliş
             if let ib = state.inbound {
                 InboundLine(info: ib)
             }
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            // 4) Sayaçlar                 RWY
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
                 if let leave = state.upcomingLeave() {
-                    Image(systemName: "house.fill").font(.caption).foregroundStyle(.green)
+                    Image(systemName: "house.fill").font(.caption2).foregroundStyle(.green)
                     Countdown(target: leave)
-                        .font(.title3.bold())
+                        .font(.headline.bold())
                         .foregroundStyle(.green)
-                        .frame(maxWidth: 78, alignment: .leading)
+                        .frame(maxWidth: 70, alignment: .leading)
                 }
-                Text("İmzaya").font(.subheadline).foregroundStyle(.white.opacity(0.6))
+                Text("İmzaya").font(.caption).foregroundStyle(.white.opacity(0.6))
                 Countdown(target: state.signOn)
-                    .font(.title3.bold())
+                    .font(.headline.bold())
                     .foregroundStyle(.yellow)
-                    .frame(maxWidth: 78, alignment: .leading)
+                    .frame(maxWidth: 70, alignment: .leading)
                 Spacer(minLength: 4)
-                Text("RWY").font(.subheadline).foregroundStyle(.white.opacity(0.6))
-                Text(Display.text(state.runway)).font(.title3.bold())
+                Text("RWY").font(.caption).foregroundStyle(.white.opacity(0.6))
+                Text(Display.text(state.runway)).font(.headline.bold())
             }
-            HStack(spacing: 14) {
-                timeItem("İmza", state.signOn)
-                timeItem("TOBT", state.tobt)
-                timeItem("TSAT", state.tsat)
-                timeItem("CTOT", state.ctot)
-                Spacer()
-                Link(destination: URL(string: "ucus://refresh")!) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.headline)
-                        .padding(8)
-                        .background(.white.opacity(0.15), in: Circle())
-                }
-                .buttonStyle(.plain)
+            // 5) Saatler tek satır          ↻
+            HStack(spacing: 8) {
+                timeInline("İmza", state.signOn)
+                timeInline("TOBT", state.tobt)
+                timeInline("TSAT", state.tsat)
+                timeInline("CTOT", state.ctot)
+                Spacer(minLength: 2)
+                Image(systemName: "arrow.clockwise")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white.opacity(0.7))
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
             if stale {
-                Text("Süre doldu").font(.caption).foregroundStyle(.orange)
+                Text("Süre doldu").font(.caption2).foregroundStyle(.orange)
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 22)
-        .padding(.bottom, 20)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
         .foregroundStyle(.white)
+    }
+
+    private func timeInline(_ title: String, _ date: Date?) -> some View {
+        HStack(spacing: 3) {
+            Text(title).foregroundStyle(.white.opacity(0.55))
+            if let date {
+                Text(date, format: .dateTime.hour().minute()).bold()
+            } else {
+                Text("—")
+            }
+        }
+        .font(.caption.monospacedDigit())
     }
 
     private func timeItem(_ title: String, _ date: Date?) -> some View {
