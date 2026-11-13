@@ -1,5 +1,6 @@
 import ActivityKit
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @StateObject private var store = FlightStore()
@@ -151,7 +152,7 @@ struct ContentView: View {
             row("Sefer", "\(info.flight)  →  \(Display.text(info.destination))")
             row("Tescil", "\(Display.text(info.registration))  ·  \(Display.text(info.aircraftType))")
             if let url = fr24URL(info) {
-                Link(destination: url) {
+                Button { FR24.open(url, flight: info.inbound?.flight) } label: {
                     Label("Flightradar24'te uçağı aç", systemImage: "location.fill.viewfinder")
                 }
             }
@@ -163,7 +164,7 @@ struct ContentView: View {
             Section("Gelen uçak") {
                 row("Nereden", [ib.flight, ib.fromCode, ib.fromCity].filter { !$0.isEmpty }.joined(separator: " · "))
                 if let url = fr24URL(info) {
-                    Link(destination: url) {
+                    Button { FR24.open(url, flight: ib.flight) } label: {
                         Label(ib.parked == nil ? "Canlı konum (Flightradar24)" : "Flightradar24'te aç",
                               systemImage: "location.fill.viewfinder")
                             .font(.headline)
@@ -606,5 +607,25 @@ struct DiagnosticsView: View {
         .navigationTitle("Tanılama")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { lines = DebugLog.lines }
+    }
+}
+
+/// Flightradar24'ü mümkünse doğrudan uygulamasında açar.
+enum FR24 {
+    @MainActor
+    static func open(_ url: URL, flight: String?) {
+        let app = UIApplication.shared
+        // 1) Sadece uygulamada aç (iOS bu adresi FR24'e yönlendirebiliyorsa)
+        app.open(url, options: [.universalLinksOnly: true]) { ok in
+            guard !ok else { return }
+            // 2) FR24 uygulamasının kendi adresi
+            let q = (flight ?? "").replacingOccurrences(of: " ", with: "")
+            let scheme = URL(string: q.isEmpty ? "fr24://" : "fr24://\(q)")!
+            app.open(scheme, options: [:]) { ok2 in
+                guard !ok2 else { return }
+                // 3) Safari
+                app.open(url)
+            }
+        }
     }
 }
