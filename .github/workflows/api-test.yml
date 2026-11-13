@@ -5,11 +5,18 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    environment: APPLE_TEAM_ID
     steps:
-      - name: FR24 apple-app-site-association
+      - name: TK1939 / TK1940 gate'leri
         continue-on-error: true
+        env:
+          KEY: ${{ secrets.RAPIDAPI_KEY }}
         run: |
-          for host in www.flightradar24.com flightradar24.com fr24.com www.fr24.com; do
-            echo "=== $host"
-            curl -sL -A "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" -w "\nHTTP %{http_code}\n" "https://$host/.well-known/apple-app-site-association" | head -c 3000; echo
+          for f in TK1939 TK1940 TK1938; do
+            for d in 0 1 2 3; do
+              day=$(date -u -d "-$d day" +%F)
+              curl -s -o out.json -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
+                "https://aerodatabox.p.rapidapi.com/flights/number/$f/$day?withAircraftImage=false&withLocation=false"
+              jq -r --arg f "$f" --arg d "$day" '.[]? | "\($f) \($d) \(.departure.airport.icao)->\(.arrival.airport.icao) depGate=\(.departure.gate // "-") arrGate=\(.arrival.gate // "-") dep=\(.departure.scheduledTime.utc // "-") status=\(.status)"' out.json 2>/dev/null || echo "$f $day: $(head -c 120 out.json)"
+            done
           done
