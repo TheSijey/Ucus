@@ -18,7 +18,7 @@ jobs:
             curl -s -o out.json -w "HTTP %{http_code}\n" \
               -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
               "https://aerodatabox.p.rapidapi.com/flights/reg/$r?withAircraftImage=false&withLocation=false"
-            head -c 2500 out.json; echo
+            jq -r '.[] | "\(.number) \(.departure.airport.icao)->\(.arrival.airport.icao) dep \(.departure.scheduledTime.utc) arr \(.arrival.scheduledTime.utc) rwyT \(.arrival.runwayTime.utc // "-") rev \(.arrival.revisedTime.utc // "-") \(.status)"' out.json
           done
       - name: aviationweather airport
         run: |
