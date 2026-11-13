@@ -34,6 +34,7 @@ final class AppModel: ObservableObject {
     }
 
     func start(query raw: String, plannedDay: Date?) async {
+        AeroDataBox.clearQuotaBlock()
         if plannedDay == nil { startingPlanned = nil }
         guard !loading else { return }
         loading = true
@@ -81,6 +82,7 @@ final class AppModel: ObservableObject {
     // MARK: - Yenile / kaldır
 
     func refresh() async {
+        AeroDataBox.clearQuotaBlock()
         guard !loading else { return }
         loading = true
         defer { loading = false }

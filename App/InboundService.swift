@@ -206,8 +206,16 @@ enum AeroDataBox {
     }
 
     /// Kota dolunca (HTTP 429) bir süre hiç sorgu yapılmaz.
+    /// Kota dolunca (HTTP 429) 30 dk sorgu yapılmaz. Eski sürümün 6 saatlik beklemesi geçersiz sayılır.
     static var quotaBlocked: Bool {
-        (UserDefaults.standard.object(forKey: "aeroBlockedUntil") as? Date).map { $0 > Date() } ?? false
+        guard let until = UserDefaults.standard.object(forKey: "aeroBlockedUntil") as? Date else { return false }
+        let left = until.timeIntervalSinceNow
+        return left > 0 && left <= 30 * 60
+    }
+
+    /// Elle yenileme ya da yeni takip: beklemeyi kaldır, hemen tekrar dene.
+    static func clearQuotaBlock() {
+        UserDefaults.standard.removeObject(forKey: "aeroBlockedUntil")
     }
 
     /// Yanıtlar diskte saklanır: uygulama kapanıp açılınca aynı sorgu tekrar yapılmaz.
@@ -257,8 +265,8 @@ enum AeroDataBox {
             return []
         }
         if http.statusCode == 429 {
-            UserDefaults.standard.set(Date().addingTimeInterval(6 * 3600), forKey: "aeroBlockedUntil")
-            DebugLog.add("AeroDataBox kotası doldu (429); 6 saat sorgu yapılmayacak")
+            UserDefaults.standard.set(Date().addingTimeInterval(30 * 60), forKey: "aeroBlockedUntil")
+            DebugLog.add("AeroDataBox kotası doldu (429); 30 dk sorgu yapılmayacak")
             return cached
         }
         guard http.statusCode == 200, let flights = decode(result.0) else {
