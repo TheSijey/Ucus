@@ -6,18 +6,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Uç noktaları bul
+      - name: CDM servis
         continue-on-error: true
         run: |
-          curl -s https://mobilecdm.igairport.aero/main.6c7227d6935ca229.js > m.js
-          grep -oE '.{0,200}(Flight|flight)[A-Za-z]*/.{0,200}' m.js | head -20
-          echo ----
-          grep -oE '.{0,150}\.(get|post)\(.{0,250}' m.js | grep -iv 'headers.get\|params.get\|map.get' | head -30
-      - name: Arayüz metnini al
-        continue-on-error: true
-        run: |
-          for q in 828 TK828 THY828 TK1355; do
-            google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=15000 \
-              --dump-dom "https://mobilecdm.igairport.aero/#/flight/$q" 2>/dev/null \
-              | sed -e 's/<style[^>]*>.*<\/style>//g' -e 's/<[^>]*>/ /g' | tr -s ' \n' ' ' | grep -o 'Last Updated.\{0,250\}\|Flight not found.\{0,40\}' | head -2 | sed "s/^/=== $q: /"
+          curl -s https://mobilecdm.igairport.aero/main.6c7227d6935ca229.js | grep -oE 'getDefaultHeaders\(.{0,400}' | head -2
+          for q in TK828 828 TK1355 LPO; do
+            echo "=== $q"; curl -s -m 20 -H "Auto-Refresh: true" -H "Accept: application/json" "https://mobilecdm.igairport.aero/Service/api/Flight/$q" | head -c 1500; echo
           done
