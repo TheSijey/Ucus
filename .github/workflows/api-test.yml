@@ -6,22 +6,18 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: CDM arama biçimleri
+      - name: Uç noktaları bul
         continue-on-error: true
         run: |
-          for q in 828 TK828 TK%20828 THY828 0828 TK0828 1355 TK1355; do
+          curl -s https://mobilecdm.igairport.aero/main.6c7227d6935ca229.js > m.js
+          grep -oE '.{0,200}(Flight|flight)[A-Za-z]*/.{0,200}' m.js | head -20
+          echo ----
+          grep -oE '.{0,150}\.(get|post)\(.{0,250}' m.js | grep -iv 'headers.get\|params.get\|map.get' | head -30
+      - name: Arayüz metnini al
+        continue-on-error: true
+        run: |
+          for q in 828 TK828 THY828 TK1355; do
             google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=15000 \
-              --user-agent="Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1" \
-              --dump-dom "https://mobilecdm.igairport.aero/#/flight/$q" 2>/dev/null > dom.html
-            echo "=== $q: $(sed -e 's/<[^>]*>/ /g' dom.html | tr -s ' \n' ' ' | head -c 400)"
-          done
-      - name: Site JS içindeki API uçları
-        continue-on-error: true
-        run: |
-          curl -s https://mobilecdm.igairport.aero/ > index.html
-          grep -o 'src="[^"]*\.js"' index.html
-          for js in $(grep -o 'src="[^"]*\.js"' index.html | sed 's/src="//;s/"$//'); do
-            case $js in http*) u=$js;; /*) u=https://mobilecdm.igairport.aero$js;; *) u=https://mobilecdm.igairport.aero/$js;; esac
-            curl -s "$u" > b.js; echo "--- $u $(wc -c < b.js)"
-            grep -oE '(https?:)?//[a-zA-Z0-9./_-]*|"/api[^"]*"|`[^`]*api[^`]*`|"[^"]*[Ff]light[^"]{0,60}"' b.js | sort -u | head -60
+              --dump-dom "https://mobilecdm.igairport.aero/#/flight/$q" 2>/dev/null \
+              | sed -e 's/<style[^>]*>.*<\/style>//g' -e 's/<[^>]*>/ /g' | tr -s ' \n' ' ' | grep -o 'Last Updated.\{0,250\}\|Flight not found.\{0,40\}' | head -2 | sed "s/^/=== $q: /"
           done
