@@ -12,7 +12,8 @@ jobs:
           KEY: ${{ secrets.RAPIDAPI_KEY }}
         run: |
           for q in TK829/2026-11-14; do
-            curl -s -o o.json -w "http=%{http_code}\n" -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
+            curl -s -D h.txt -o o.json -w "http=%{http_code}\n" -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
               "https://aerodatabox.p.rapidapi.com/flights/number/$q?withAircraftImage=false&withLocation=false"
+            grep -i "ratelimit\|x-rapidapi" h.txt | grep -vi "key\|proxy-secret" | sed "s/^/HDR /"
             echo "== $q"; jq -c '.[0] | {number, status, aircraft, departure: (.departure|{airport:(.airport|{icao,iata,name,municipalityName,timeZone}),scheduledTime,revisedTime,gate,terminal,runway}), arrival: (.arrival|{airport:(.airport|{icao,iata,municipalityName,timeZone}),scheduledTime,revisedTime,predictedTime,gate})}' o.json || head -c 300 o.json
           done
