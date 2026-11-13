@@ -214,8 +214,8 @@ struct EmptyFlightView: View {
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "airplane.departure").font(.system(size: 44)).foregroundStyle(Palette.secondary)
-            Text("Ada'da uçuş yok").font(.title3.bold())
-            Text("Uçuşlarım'dan bir uçuşu ekle ya da sefer/tescil ara.")
+            Text("Takip edilen uçuş yok").font(.title3.bold())
+            Text("Uçuşlarım'da bir uçuşa \"Takibi başlat\" de ya da sefer/tescil ara.")
                 .font(.subheadline).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
             Button {
                 model.tab = .flights

@@ -7,20 +7,28 @@ struct OnboardingView: View {
     @State private var page = 0
 
     private let pages: [(icon: String, color: Color, title: String, lines: [String])] = [
+        ("airplane", .cyan, "Hoş geldin",
+         ["Uçuş, İGA CDM'deki stand, tescil, pist ve saatleri tek yerde toplar.",
+          "Kilit ekranında, Dynamic Island'da ve saatinde görürsün.",
+          "Servise binerken standı söylemek için telefonu açman yeter."]),
         ("list.bullet.rectangle", .blue, "Uçuşlarını ekle",
-         ["Sağ üstteki + ile tarih ve sefer numarası gir.",
-          "Tarih UTC'dir: roster'da ne görüyorsan onu seç.",
-          "Ekledikçe takvim bir sonraki güne geçer."]),
-        ("airplane.departure", .cyan, "Ada'ya ekle",
-         ["Listede uçuşa dokun.",
-          "Stand, tescil, gate ve saatler İGA CDM'den gelir.",
-          "Kilit ekranında, Ada'da ve saatinde görünür."]),
-        ("timer", .green, "Sayaçlar",
+         ["Uçuşlarım sekmesinde + ile tarih ve sefer numarası gir.",
+          "Tarih UTC'dir: roster'da hangi gün yazıyorsa onu seç.",
+          "Ekledikçe takvim bir sonraki güne geçer; geçmiş uçuşlar kendiliğinden silinir."]),
+        ("location.fill", .green, "Takibi başlat",
+         ["Uçuş günü kartındaki Takibi başlat'a dokun.",
+          "Bilgiler CDM'den çekilir ve kilit ekranına, Ada'ya ve saate gelir.",
+          "Stand ya da saat değişirse kilit ekranındaki ↻ ile yenile."]),
+        ("timer", .yellow, "Sayaçlar",
          ["Yeşil ⌂ sayaç: evden çıkışa kalan süre.",
           "Sarı sayaç: imzaya kalan süre (EOBT − 1:15).",
-          "İmza + 30 dk'da Ada'dan kalkar; kilit ekranı ve uygulama dönüş inişine kadar kalır."]),
+          "EOBT öne çekilirse imza saati değişmez, ertelenirse yeni saate geçer."]),
+        ("rectangle.split.3x1", .purple, "Sekmeler",
+         ["Bugün: stand, gate, pist, TOBT/TSAT/CTOT ve gelen uçak.",
+          "Tur: imzadan dönüş inişine kadar günün akışı.",
+          "Hava: METAR, TAF ve pist rüzgârı; gidiş yeşil, dönüş mavi işaretli."]),
         ("bell.badge", .orange, "İzinler",
-         ["Bildirime izin ver: çıkış saatinde chime çalar.",
+         ["Bildirime izin ver: çıkış saatinde uçak sesi çalar.",
           "Canlı Etkinlikler açık olmalı (Ayarlar > Uçuş).",
           "Çıkış süresini ⚙ Ayarlar'dan değiştirebilirsin."]),
     ]
@@ -81,26 +89,39 @@ struct OnboardingView: View {
 // MARK: - Nasıl kullanılır
 
 struct HelpView: View {
-    @AppStorage("onboardingDone") private var onboardingDone = false
+    @AppStorage("onboardingDone2") private var onboardingDone = false
 
     var body: some View {
         List {
             Section("Uçuş ekleme") {
-                bullet("Sağ üstteki + → tarih (UTC, roster'daki gibi) ve sefer numarası (1751 ya da TK1751).")
+                bullet("Uçuşlarım sekmesinde + → tarih (UTC, roster'daki gibi) ve sefer numarası (1751 ya da TK1751).")
                 bullet("Alttaki mavi Ekle butonu klavye açıkken de görünür; takvim her eklemede bir gün ilerler.")
-                bullet("Silmek için listedeki uçuşu sola kaydır. Geçmiş günler kendiliğinden silinir.")
+                bullet("Silmek için uçuşu sola kaydır. Geçmiş günler kendiliğinden silinir.")
             }
-            Section("Ada'ya ekleme") {
-                bullet("Uçuşlarım sekmesinde uçuşa dokun ya da Hızlı arama'ya sefer/tescil yaz (1751, LTD, TC-LTD).")
-                bullet("CDM o günün uçuşunu genelde aynı gün gösterir; başka bir günü gösterirse uygulama sorar.")
-                bullet("Stand ya da saat değişirse kilit ekranındaki ↻'a dokun: uygulama açılır ve yenilenir. Uygulamada sağ üstteki ↻ ya da Yenile de aynı işi yapar.")
-                bullet("EOBT öne çekilirse imza ve çıkış saatleri değişmez; ertelenirse yeni saate geçer. Uçuşu Ada'dan kaldırıp yeniden eklesen de bu kural geçerli.")
+            Section("Takibi başlatma") {
+                bullet("Sıradaki uçuşun kartında Takibi başlat'a dokun. Listede olmayan bir uçuş için Hızlı arama'ya sefer ya da tescil yaz (1751, LTD, TC-LTD).")
+                bullet("Takip başlayınca kart \"Takip ediliyor\" olur; buton Takibi yenile'ye döner.")
+                bullet("CDM uçuşu genelde aynı gün gösterir; başka bir günü gösterirse uygulama sorar.")
+                bullet("Stand ya da saat değişirse kilit ekranındaki ↻'a dokun: uygulama açılır ve yenilenir. Uygulamada sağ üstteki ↻ da aynı işi yapar; uygulamayı açtığında da kendiliğinden yenilenir.")
+                bullet("EOBT öne çekilirse imza ve çıkış saatleri değişmez; ertelenirse yeni saate geçer. Takibi yeniden başlatsan da bu kural geçerli.")
             }
             Section("Sayaçlar ve bildirim") {
                 bullet("İmza = EOBT − 1:15. Evden çıkış = imza − Ayarlar'daki süre.")
-                bullet("Çıkışa kadar yeşil ⌂ sayaç, sonra sarı imza sayacı. Çıkış saatinde chime'lı bildirim gelir.")
-                bullet("Bildirime dokununca Ada hemen imza sayacına geçer; dokunmazsan iOS birkaç dakika içinde geçirir.")
-                bullet("İmza + 30 dk'da Ada'dan kalkar. Kilit ekranında dönüş inişine kadar (iOS en fazla 4 saat) kalır; uygulamada gate, hava ve tur bilgisi dönüş inişine kadar durur.")
+                bullet("Çıkışa kadar yeşil ⌂ sayaç, sonra sarı imza sayacı. Çıkış saatinde uçak sesli bildirim gelir.")
+                bullet("Bildirime dokununca sayaç hemen imzaya geçer; dokunmazsan iOS birkaç dakika içinde geçirir.")
+                bullet("İmza + 30 dk'da uçuş Dynamic Island'dan kalkar. Kilit ekranında dönüş inişine kadar (iOS en fazla 4 saat) kalır; uygulamada dönüş inişine kadar durur.")
+            }
+            Section("Bugün") {
+                bullet("Üstte stand, tescil ve sıradaki olay; altında gate, pist, TOBT, TSAT, CTOT kutuları.")
+                bullet("Gelen uçak satırına dokununca uçak Flightradar24'te açılır.")
+            }
+            Section("Tur") {
+                bullet("Gelen uçak, imza, kalkış, varış, dönüş ve bitiş adım adım sıralanır.")
+                bullet("Üstteki seçiciyle saatleri yerel ya da UTC görebilirsin.")
+            }
+            Section("Hava") {
+                bullet("İstanbul ve varış meydanı için METAR ve TAF. TAF'ta gidiş saatlerine denk gelen gruplar yeşil, dönüş saatlerine denk gelenler mavi işaretlenir.")
+                bullet("Pist rüzgârı: yeşil ok karşı, kırmızı arka, turuncu yan rüzgâr. İstanbul'da CDM pisti (aktif), yoksa rüzgâra göre muhtemel pist; varışta son seferlerde inilen pist açılır. Alttaki pist kutucuklarıyla diğer pistlere geçebilirsin.")
             }
             if InboundService.isEnabled {
                 Section("Gelen uçak") {
@@ -110,7 +131,7 @@ struct HelpView: View {
                 }
             }
             Section("Sorun olursa") {
-                bullet("Ada çıkmıyor: Ayarlar > Uçuş > Canlı Etkinlikler açık mı?")
+                bullet("Kilit ekranında ya da Ada'da görünmüyor: Ayarlar > Uçuş > Canlı Etkinlikler açık mı?")
                 bullet("Bildirim/ses yok: Ayarlar > Uçuş > Bildirimler açık mı? Telefon sessizde mi?")
                 bullet("Saatte görünmüyor: iPhone'da Watch uygulaması > Akıllı Yığın > Canlı Etkinlikler.")
                 bullet("CDM'den okunamadı: hata yazısındaki \"Sayfada görünen\" kısmının ekran görüntüsünü al.")

@@ -54,7 +54,7 @@ struct FlightsView: View {
                         if model.loading { ProgressView() }
                     }
                     Button(action: search) {
-                        Label("Getir ve Ada'ya koy", systemImage: "airplane.departure").frame(maxWidth: .infinity)
+                        Label("Bul ve takibi başlat", systemImage: "airplane.departure").frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.loading || query.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -111,7 +111,7 @@ struct FlightsView: View {
                 }
                 Spacer()
                 if isActive {
-                    Text("Ada'da").font(.caption.bold()).foregroundStyle(Palette.outbound)
+                    Text("Takip ediliyor").font(.caption.bold()).foregroundStyle(Palette.outbound)
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(Palette.outbound.opacity(0.15), in: Capsule())
                 }
@@ -120,8 +120,8 @@ struct FlightsView: View {
                 Task { await model.start(planned: f) }
             } label: {
                 HStack {
-                    if model.loading { ProgressView().tint(.white) } else { Image(systemName: "plus") }
-                    Text(isActive ? "Yeniden ekle" : "Ada'ya ekle")
+                    if model.loading { ProgressView().tint(.white) } else { Image(systemName: isActive ? "arrow.clockwise" : "location.fill") }
+                    Text(isActive ? "Takibi yenile" : "Takibi başlat")
                 }
                 .font(.headline)
                 .frame(maxWidth: .infinity)

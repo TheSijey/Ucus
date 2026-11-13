@@ -4,7 +4,7 @@ import Foundation
 /// "Hey Siri, Uçuş'ta uçuşumu başlat": listedeki ilk (bugünkü) uçuşu Ada'ya ekler.
 struct StartNextFlightIntent: AppIntent {
     static var title: LocalizedStringResource = "Uçuşumu başlat"
-    static var description = IntentDescription("Uçuşlarım listesindeki sıradaki uçuşu CDM'den çekip Ada'ya ekler.")
+    static var description = IntentDescription("Uçuşlarım listesindeki sıradaki uçuşu CDM'den çekip takibini başlatır.")
     /// CDM sayfası görünmez tarayıcıda açıldığı için uygulama kısa süre açılır.
     static var openAppWhenRun = true
 
@@ -36,12 +36,12 @@ struct StartNextFlightIntent: AppIntent {
             try await LiveActivityManager.start(query: CDMFetcher.normalize(planned.flight), state: state)
             FlightStore.markStarted(planned, until: FlightSession.shared.state?.tourEnd ?? state.tourEnd)
         } catch {
-            return .result(dialog: "Ada'ya eklenemedi. Ayarlar'da Canlı Etkinlikler açık mı?")
+            return .result(dialog: "Takip başlatılamadı. Ayarlar'da Canlı Etkinlikler açık mı?")
         }
 
         let signOn = state.signOn.formatted(.dateTime.hour().minute())
         let stand = state.stand.isEmpty ? "henüz yok" : state.stand
-        return .result(dialog: "\(state.flight) Ada'ya eklendi. Stand \(stand), imza \(signOn).")
+        return .result(dialog: "\(state.flight) takip ediliyor. Stand \(stand), imza \(signOn).")
     }
 }
 
@@ -53,7 +53,7 @@ struct UcusShortcuts: AppShortcutsProvider {
             phrases: [
                 "\(.applicationName)'ta uçuşumu başlat",
                 "\(.applicationName) uçuşumu başlat",
-                "\(.applicationName) Ada'ya ekle",
+                "\(.applicationName) takibi başlat",
                 "Start my flight in \(.applicationName)",
             ],
             shortTitle: "Uçuşumu başlat",

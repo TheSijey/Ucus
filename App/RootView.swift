@@ -4,7 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var model = AppModel()
     @ObservedObject private var session = FlightSession.shared
-    @AppStorage("onboardingDone") private var onboardingDone = false
+    @AppStorage("onboardingDone2") private var onboardingDone = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {

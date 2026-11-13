@@ -121,7 +121,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Çıkış bildirimi")
                 } footer: {
-                    Text("Bu saate kadar Ada'da yeşil ev sayacı, sonra sarı imza sayacı görünür. O anda chime sesiyle bildirim gelir. Değişiklik bir sonraki Ada'ya eklemede geçerli olur.")
+                    Text("Bu saate kadar Ada'da yeşil ev sayacı, sonra sarı imza sayacı görünür. O anda chime sesiyle bildirim gelir. Değişiklik bir sonraki takip başlatmada geçerli olur.")
                 }
                 Section {
                     NavigationLink("Nasıl kullanılır?") { HelpView() }
@@ -169,7 +169,7 @@ struct DiagnosticsView: View {
                 if lines.isEmpty { Text("Kayıt yok.").foregroundStyle(.secondary) }
                 ForEach(lines, id: \.self) { Text($0).font(.caption.monospaced()) }
             } footer: {
-                Text("Ada'dan düşme gibi bir sorun olursa bu ekranın görüntüsünü gönder.")
+                Text("Takip kendiliğinden kapanma gibi bir sorun olursa bu ekranın görüntüsünü gönder.")
             }
             Section {
                 Button("Kayıtları temizle", role: .destructive) {
