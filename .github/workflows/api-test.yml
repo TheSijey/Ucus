@@ -13,7 +13,7 @@ jobs:
           REG: TC-LTD
         run: |
           echo "Anahtar uzunluğu: ${#KEY}"
-          for r in "$REG" "${REG//-/}"; do
+          for r in "$REG/$(date -u +%F)"; do
             echo "=== /flights/reg/$r"
             curl -s -o out.json -w "HTTP %{http_code}\n" \
               -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
