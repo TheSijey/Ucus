@@ -159,7 +159,10 @@ struct ContentView: View {
                 row("Nereden", [ib.flight, ib.fromCode, ib.fromCity].filter { !$0.isEmpty }.joined(separator: " · "))
                 if let parked = ib.parked {
                     LabeledContent("Park etti") {
-                        Text("\(parked.formatted(.dateTime.hour().minute())) · ") + Text(parked, style: .relative) + Text(" önce")
+                        HStack(spacing: 4) {
+                            Text("\(parked.formatted(.dateTime.hour().minute())) ·")
+                            MinutesAgo(date: parked)
+                        }
                     }
                 } else {
                     if let landed = ib.landed {

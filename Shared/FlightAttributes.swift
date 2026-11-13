@@ -115,3 +115,21 @@ enum Display {
         }
     }
 }
+
+/// "47 dk önce" / "2 sa 5 dk önce" – saniyesiz, dakikada bir güncellenir.
+struct MinutesAgo: View {
+    let date: Date
+    var suffix = " önce"
+
+    var body: some View {
+        TimelineView(.everyMinute) { ctx in
+            Text(Self.text(from: date, to: ctx.date) + suffix)
+        }
+    }
+
+    static func text(from: Date, to: Date) -> String {
+        let m = max(0, Int(to.timeIntervalSince(from) / 60))
+        if m < 60 { return "\(m) dk" }
+        return m % 60 == 0 ? "\(m / 60) sa" : "\(m / 60) sa \(m % 60) dk"
+    }
+}

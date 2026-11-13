@@ -176,7 +176,7 @@ struct LockScreenView: View {
     }
 }
 
-/// "✈︎ Geliş AYT · park 47 dk önce" ya da "✈︎ Geliş AYT · parkta ~19:51"
+/// "✈︎ Geliş AYT · park 13:42" ya da "✈︎ Geliş AYT · parkta ~19:51"
 struct InboundLine: View {
     let info: InboundInfo
 
@@ -188,8 +188,7 @@ struct InboundLine: View {
             Text("·")
             if let parked = info.parked {
                 Text("park")
-                Text(parked, style: .relative)
-                Text("önce")
+                Text(parked, format: .dateTime.hour().minute()).bold()
             } else if let est = info.estimatedPark {
                 Text(info.landed != nil ? "indi, parkta ~" : "parkta ~")
                 Text(est, format: .dateTime.hour().minute()).bold()

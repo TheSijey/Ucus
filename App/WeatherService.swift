@@ -121,7 +121,7 @@ struct WeatherSection: View {
                         }
                         Spacer()
                         if let t = w.metarTime {
-                            (Text(t, style: .relative) + Text(" önce"))
+                            MinutesAgo(date: t)
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
