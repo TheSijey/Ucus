@@ -7,15 +7,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: APPLE_TEAM_ID
     steps:
-      - name: TC-JSO gün listesi
+      - name: TK828
         env:
           KEY: ${{ secrets.RAPIDAPI_KEY }}
         run: |
-          for d in 2026-11-12 2026-11-13; do
-            curl -s -o o.json -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
-              "https://aerodatabox.p.rapidapi.com/flights/reg/TC-JSO/$d?withAircraftImage=false&withLocation=false"
-            echo "== $d"; jq -r '.[]? | "\(.number) \(.departure.airport.iata)->\(.arrival.airport.iata) dep=\(.departure.scheduledTime.utc // "-") arr=\(.arrival.scheduledTime.utc // "-") rev=\(.arrival.revisedTime.utc // "-") status=\(.status)"' o.json || head -c 300 o.json
+          for d in 2026-11-13 2026-11-14; do
+            curl -s -o o.json -w "http=%{http_code}\n" -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
+              "https://aerodatabox.p.rapidapi.com/flights/number/TK828/$d?withAircraftImage=false&withLocation=false"
+            echo "== $d"; jq -r '.[]? | "\(.number) \(.departure.airport.icao)->\(.arrival.airport.icao) dep=\(.departure.scheduledTime.utc) local=\(.departure.scheduledTime.local)"' o.json || head -c 300 o.json
           done
-          curl -s -o o.json -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
-            "https://aerodatabox.p.rapidapi.com/flights/number/TK2033/2026-11-13?withAircraftImage=false&withLocation=false"
-          echo "== TK2033"; jq -r '.[]? | "\(.number) reg=\(.aircraft.reg) \(.departure.airport.iata)->\(.arrival.airport.iata) status=\(.status) arr=\(.arrival.revisedTime.utc // .arrival.scheduledTime.utc)"' o.json
+          echo "== airport BEY"; curl -s "https://aviationweather.gov/api/data/airport?ids=BEY&format=json" | head -c 300; echo
+          echo "== airport OLBA"; curl -s "https://aviationweather.gov/api/data/airport?ids=OLBA&format=json" | jq -r '.[0] | "\(.icaoId) \(.iataId)"'
