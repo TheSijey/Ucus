@@ -150,6 +150,11 @@ struct ContentView: View {
         Section("Ada'da") {
             row("Sefer", "\(info.flight)  →  \(Display.text(info.destination))")
             row("Tescil", "\(Display.text(info.registration))  ·  \(Display.text(info.aircraftType))")
+            if let url = fr24URL(info) {
+                Link(destination: url) {
+                    Label("Flightradar24'te uçağı aç", systemImage: "location.fill.viewfinder")
+                }
+            }
             row("Stand", info.stand)
             row("Gate", info.gate)
             row("Pist", info.runway)
@@ -157,6 +162,13 @@ struct ContentView: View {
         if let ib = info.inbound {
             Section("Gelen uçak") {
                 row("Nereden", [ib.flight, ib.fromCode, ib.fromCity].filter { !$0.isEmpty }.joined(separator: " · "))
+                if let url = fr24URL(info) {
+                    Link(destination: url) {
+                        Label(ib.parked == nil ? "Canlı konum (Flightradar24)" : "Flightradar24'te aç",
+                              systemImage: "location.fill.viewfinder")
+                            .font(.headline)
+                    }
+                }
                 if let parked = ib.parked {
                     LabeledContent("Park etti") {
                         HStack(spacing: 4) {
@@ -258,6 +270,16 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    /// Uçak havadaysa gelen seferin canlı takibi, değilse uçağın (tescil) sayfası.
+    /// FR24 uygulaması yüklüyse doğrudan o açılır.
+    private func fr24URL(_ info: FlightAttributes.ContentState) -> URL? {
+        if let ib = info.inbound, ib.parked == nil, ib.landed == nil, !ib.flight.isEmpty {
+            return URL(string: "https://www.flightradar24.com/\(ib.flight.replacingOccurrences(of: " ", with: ""))")
+        }
+        guard !info.registration.isEmpty else { return nil }
+        return URL(string: "https://www.flightradar24.com/data/aircraft/\(info.registration.lowercased())")
     }
 
     /// TAF'ta işaretlenecek saatler: İstanbul'da kalkış (yeşil) ve dönüş inişi (mavi),
