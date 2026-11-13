@@ -5,6 +5,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: IATA -> ICAO tablosu
         run: |
@@ -22,7 +24,13 @@ jobs:
           print(len(out), out.get('BEY'), out.get('LUX'), out.get('BER'), out.get('COV'))
           PY
           ls -la iata.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v4
         with:
-          name: iata
-          path: iata.json
+          path: repo
+      - name: Tabloyu dala yaz
+        run: |
+          cp iata.json repo/iata.json
+          cd repo
+          git config user.name ci; git config user.email ci@example.com
+          git add iata.json; git commit -m "iata.json [skip ci]" || true
+          git push
