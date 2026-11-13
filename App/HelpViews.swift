@@ -9,8 +9,7 @@ struct OnboardingView: View {
     private let pages: [(icon: String, color: Color, title: String, lines: [String])] = [
         ("airplane", .cyan, "Hoş geldin",
          ["Uçuş, İGA CDM'deki stand, tescil, pist ve saatleri tek yerde toplar.",
-          "Kilit ekranında, Dynamic Island'da ve saatinde görürsün.",
-          "Servise binerken standı söylemek için telefonu açman yeter."]),
+          "Kilit ekranında, Dynamic Island'da ve saatinde görürsün."]),
         ("list.bullet.rectangle", .blue, "Uçuşlarını ekle",
          ["Uçuşlarım sekmesinde + ile tarih ve sefer numarası gir.",
           "Tarih UTC'dir: roster'da hangi gün yazıyorsa onu seç.",
