@@ -47,8 +47,12 @@ struct TourView: View {
                 .font(.caption).foregroundStyle(Palette.secondary)
             if let parked = ib.parked {
                 HStack(spacing: 4) {
-                    Text("Park \(t(parked)) ·").font(.headline)
+                    Text("Park \(ib.approx)\(showUTC ? t(parked) : DayClock.text(parked)) ·").font(.headline)
                     MinutesAgo(date: parked).font(.headline)
+                }
+                if ib.isAssumed == true {
+                    Text("Gerçek iniş/park saati yayınlanmadı; tahmini saate göre gösteriliyor.")
+                        .font(.caption2).foregroundStyle(Palette.secondary)
                 }
             } else if let landed = ib.landed {
                 Text("İndi \(t(landed)) · parkta ~\(t(ib.estimatedPark))").font(.headline)

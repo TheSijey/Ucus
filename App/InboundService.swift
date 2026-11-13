@@ -373,6 +373,13 @@ enum AeroDataBox {
            let base = landed ?? info.estimatedLanding {
             info.estimatedPark = base.addingTimeInterval(Double(est.minutes) * 60)
         }
+        // Gerçek saat gelmemiş ama tahmini park saati 30 dk'dan eski: uçak inmiş ve parkta kabul et.
+        if info.parked == nil, let ep = info.estimatedPark, ep < Date().addingTimeInterval(-30 * 60) {
+            if info.landed == nil { info.landed = info.estimatedLanding }
+            info.parked = ep
+            info.estimatedLanding = nil
+            info.isAssumed = true
+        }
         return info
     }
 }

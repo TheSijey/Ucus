@@ -178,7 +178,7 @@ struct TodayView: View {
     private func inboundSubtitle(_ ib: InboundInfo) -> some View {
         if let parked = ib.parked {
             HStack(spacing: 4) {
-                Text("Park \(FlightHelpers.hm(parked)) ·")
+                Text("Park \(ib.approx)\(DayClock.text(parked)) ·")
                 MinutesAgo(date: parked)
             }
         } else if let landed = ib.landed {

@@ -54,6 +54,23 @@ struct InboundInfo: Codable, Hashable {
     var taxiMinutes: Int?        // kullanılan taksi tahmini
     var taxiSamples: Int?        // tahminin dayandığı ölçüm sayısı
     var landingRunway: String? = nil  // iniş pisti (varsa)
+    var isAssumed: Bool? = nil        // gerçek saat yok; tahmini saat geçtiği için inmiş/parkta sayıldı
+}
+
+extension InboundInfo {
+    /// "~" işareti (saatler tahminiyse)
+    var approx: String { isAssumed == true ? "~" : "" }
+}
+
+/// "00:33" ya da başka gündeyse "dün 00:33"
+enum DayClock {
+    static func text(_ d: Date) -> String {
+        let cal = Calendar.current
+        let t = d.formatted(.dateTime.hour().minute())
+        if cal.isDateInToday(d) { return t }
+        if cal.isDateInYesterday(d) { return "dün \(t)" }
+        return d.formatted(.dateTime.day().month(.abbreviated).hour().minute())
+    }
 }
 
 extension FlightAttributes.ContentState {

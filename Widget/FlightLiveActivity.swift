@@ -210,7 +210,7 @@ struct InboundLine: View {
             Text(info.fromCode.isEmpty ? "—" : info.fromCode).bold()
             Text("·")
             if let parked = info.parked {
-                Text("park")
+                Text("park\(info.approx)")
                 Text(parked, format: .dateTime.hour().minute()).bold()
                 Text("·")
                 // iOS kendi işletir; sadece saat ve dakika (saniyesiz)
