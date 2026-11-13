@@ -11,8 +11,8 @@ struct TourView: View {
             ScrollView {
                 if let s = session.state {
                     VStack(alignment: .leading, spacing: 0) {
-                        Picker("Saat", selection: $showUTC) {
-                            Text("Yerel saat").tag(false)
+                        Picker(L("Saat", "Time"), selection: $showUTC) {
+                            Text(L("Yerel saat", "Local time")).tag(false)
                             Text("UTC").tag(true)
                         }
                         .pickerStyle(.segmented)
@@ -31,7 +31,7 @@ struct TourView: View {
                 }
             }
             .background(Palette.bg)
-            .navigationTitle("Tur")
+            .navigationTitle(L("Tur", "Trip"))
             .toolbar { CommonToolbar() }
             .refreshable { await model.refresh() }
         }
@@ -43,27 +43,27 @@ struct TourView: View {
 
     private func inboundStep(_ ib: InboundInfo) -> some View {
         Step(dot: .hollow(Palette.secondary), line: .thin) {
-            Text("Uçak geliyor · \([ib.flight, ib.fromCode].filter { !$0.isEmpty }.joined(separator: " "))")
+            Text(L("Uçak geliyor", "Inbound aircraft") + " · \([ib.flight, ib.fromCode].filter { !$0.isEmpty }.joined(separator: " "))")
                 .font(.caption).foregroundStyle(Palette.secondary)
             if let parked = ib.parked {
                 HStack(spacing: 4) {
-                    Text("Park \(ib.approx)\(showUTC ? t(parked) : DayClock.text(parked)) ·").font(.headline)
+                    Text(L("Park", "Parked") + " \(ib.approx)\(showUTC ? t(parked) : DayClock.text(parked)) ·").font(.headline)
                     MinutesAgo(date: parked).font(.headline)
                 }
                 if ib.isAssumed == true {
-                    Text("Gerçek iniş/park saati yayınlanmadı; tahmini saate göre gösteriliyor.")
+                    Text(L("Gerçek iniş/park saati yayınlanmadı; tahmini saate göre gösteriliyor.", "Actual landing/on-block time not published; shown from the estimate."))
                         .font(.caption2).foregroundStyle(Palette.secondary)
                 }
             } else if let landed = ib.landed {
-                Text("İndi \(t(landed)) · parkta ~\(t(ib.estimatedPark))").font(.headline)
+                Text(L("İndi \(t(landed)) · parkta ~\(t(ib.estimatedPark))", "Landed \(t(landed)) · on stand ~\(t(ib.estimatedPark))")).font(.headline)
             } else {
-                Text("Tahmini iniş \(t(ib.estimatedLanding)) · parkta ~\(t(ib.estimatedPark))").font(.headline)
+                Text(L("Tahmini iniş \(t(ib.estimatedLanding)) · parkta ~\(t(ib.estimatedPark))", "Est. landing \(t(ib.estimatedLanding)) · on stand ~\(t(ib.estimatedPark))")).font(.headline)
             }
             HStack(spacing: 10) {
                 if let tm = ib.taxiMinutes {
-                    Text("Taksi tahmini \(tm) dk" + ((ib.taxiSamples ?? 0) > 0 ? " (\(ib.taxiSamples!) ölçüm)" : ""))
+                    Text(L("Taksi tahmini \(tm) dk", "Taxi est. \(tm) min") + ((ib.taxiSamples ?? 0) > 0 ? L(" (\(ib.taxiSamples!) ölçüm)", " (\(ib.taxiSamples!) samples)") : ""))
                 }
-                if let rwy = ib.landingRunway, !rwy.isEmpty { Text("İniş pisti \(rwy)") }
+                if let rwy = ib.landingRunway, !rwy.isEmpty { Text(L("İniş pisti", "Landing rwy") + " \(rwy)") }
             }
             .font(.footnote).foregroundStyle(.white.opacity(0.75))
         }
@@ -71,10 +71,10 @@ struct TourView: View {
 
     private func signOnStep(_ s: FlightAttributes.ContentState) -> some View {
         Step(dot: .filled(Palette.signOn), line: .thin) {
-            Text("İmza · İstanbul").font(.caption).foregroundStyle(Palette.secondary)
+            Text(L("İmza · İstanbul", "Sign-on · Istanbul")).font(.caption).foregroundStyle(Palette.secondary)
             Text(t(s.signOn)).font(.title3.bold())
             VStack(alignment: .leading, spacing: 2) {
-                if let leave = s.leaveAt { Text("Evden çıkış \(t(leave))") }
+                if let leave = s.leaveAt { Text(L("Evden çıkış", "Leave home") + " \(t(leave))") }
                 Text("EOBT \(t(s.eobt)) · TOBT \(t(s.tobt))")
                 if s.tsat != nil || s.ctot != nil { Text("TSAT \(t(s.tsat)) · CTOT \(t(s.ctot))") }
             }
@@ -86,12 +86,12 @@ struct TourView: View {
         let dep = s.tsat ?? s.tobt ?? s.eobt
         let dest = s.turn.map { $0.destIATA.isEmpty ? $0.destICAO : $0.destIATA } ?? s.destination
         return Step(dot: .filled(Palette.outbound), line: .thick(Palette.outbound)) {
-            Text("Gidiş · \(s.flight)").font(.caption).foregroundStyle(Palette.outbound)
+            Text(L("Gidiş", "Outbound") + " · \(s.flight)").font(.caption).foregroundStyle(Palette.outbound)
             Text("IST \(t(dep)) → \(Display.text(dest)) \(t(s.turn?.outboundArrival))").font(.title3.bold())
             HStack(spacing: 8) {
                 Tile(title: "Stand", value: s.stand, color: Palette.stand)
-                Tile(title: "Pist", value: s.runway)
-                Tile(title: "Süre", value: FlightHelpers.duration(dep, s.turn?.outboundArrival) ?? "")
+                Tile(title: L("Pist", "Runway"), value: s.runway)
+                Tile(title: L("Süre", "Block"), value: FlightHelpers.duration(dep, s.turn?.outboundArrival) ?? "")
             }
         }
     }
@@ -102,21 +102,21 @@ struct TourView: View {
             let gate = FlightHelpers.destGate(tr)
             Step(dot: .hollow(Palette.secondary), line: .thin) {
                 Text([tr.destCity.isEmpty ? tr.destICAO : tr.destCity,
-                      FlightHelpers.duration(tr.outboundArrival, tr.returnDeparture).map { "tur \($0)" } ?? ""]
+                      FlightHelpers.duration(tr.outboundArrival, tr.returnDeparture).map { L("tur", "turnaround") + " \($0)" } ?? ""]
                         .filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(Palette.secondary)
                 let code = tr.destIATA.isEmpty ? tr.destICAO : tr.destIATA
                 if let gate {
-                    Text("Yolcu kapısı \(gate.isEstimate ? "~" : "")\(gate.gate) (\(code) yayını)")
+                    Text(L("Yolcu kapısı", "Passenger gate") + " \(gate.isEstimate ? "~" : "")\(gate.gate) (" + L("\(code) yayını", "published by \(code)") + ")")
                         .font(.subheadline).foregroundStyle(Palette.secondary)
                     if !tr.destGateHistory.isEmpty {
-                        Text("Son günler: " + tr.destGateHistory.joined(separator: " · "))
+                        Text(L("Son günler: ", "Recent days: ") + tr.destGateHistory.joined(separator: " · "))
                             .font(.footnote).foregroundStyle(Palette.secondary.opacity(0.8))
                     }
-                    Text("Park standı değildir; uçak uzak bir standda olabilir.")
+                    Text(L("Park standı değildir; uçak uzak bir standda olabilir.", "Not the parking stand; the aircraft may be on a remote stand."))
                         .font(.caption2).foregroundStyle(Palette.secondary.opacity(0.7))
                 } else {
-                    Text("Yolcu kapısı bilgisi yok").font(.subheadline).foregroundStyle(Palette.secondary)
+                    Text(L("Yolcu kapısı bilgisi yok", "No passenger gate info")).font(.subheadline).foregroundStyle(Palette.secondary)
                 }
             }
         }
@@ -125,22 +125,22 @@ struct TourView: View {
     private func returnStep(_ tr: TurnInfo) -> some View {
         let dest = tr.destIATA.isEmpty ? tr.destICAO : tr.destIATA
         return Step(dot: .filled(Palette.ret), line: .thick(Palette.ret)) {
-            Text("Dönüş · \(tr.returnFlight ?? "")").font(.caption).foregroundStyle(Color(red: 0.6, green: 0.79, blue: 1))
+            Text(L("Dönüş", "Return") + " · \(tr.returnFlight ?? "")").font(.caption).foregroundStyle(Color(red: 0.6, green: 0.79, blue: 1))
             Text("\(dest) \(t(tr.returnDeparture)) → IST \(t(tr.returnArrival))").font(.title3.bold())
             if let d = FlightHelpers.duration(tr.returnDeparture, tr.returnArrival) {
-                Text("Süre \(d)").font(.footnote).foregroundStyle(.white.opacity(0.75))
+                Text(L("Süre", "Block") + " \(d)").font(.footnote).foregroundStyle(.white.opacity(0.75))
             }
         }
     }
 
     private func endStep(_ s: FlightAttributes.ContentState) -> some View {
         Step(dot: .filled(.white), line: .none) {
-            Text("Görev sonu · İstanbul").font(.caption).foregroundStyle(Palette.secondary)
+            Text(L("Görev sonu · İstanbul", "Duty end · Istanbul")).font(.caption).foregroundStyle(Palette.secondary)
             Text(t(s.turn?.returnArrival ?? s.turn?.outboundArrival)).font(.title3.bold())
             if let total = FlightHelpers.duration(s.signOn, s.turn?.returnArrival) {
-                Text("İmzadan itibaren \(total)").font(.footnote).foregroundStyle(.white.opacity(0.75))
+                Text(L("İmzadan itibaren", "Since sign-on") + " \(total)").font(.footnote).foregroundStyle(.white.opacity(0.75))
             }
-            Text("Uçuş, uygulamada ve kilit ekranında bu saate kadar kalır (Ada'dan imza + 30 dk'da kalkar).")
+            Text(L("Uçuş, uygulamada ve kilit ekranında bu saate kadar kalır (Ada'dan imza + 30 dk'da kalkar).", "The flight stays in the app and on the Lock Screen until this time (leaves the Dynamic Island at sign-on + 30 min)."))
                 .font(.caption2).foregroundStyle(Palette.secondary).padding(.top, 4)
         }
     }

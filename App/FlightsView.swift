@@ -22,30 +22,30 @@ struct FlightsView: View {
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
                     } header: {
-                        Text("Sıradaki")
+                        Text(L("Sıradaki", "Next"))
                     }
                 }
 
                 Section {
                     if store.upcoming.count <= 1 {
-                        Text(store.upcoming.isEmpty ? "Henüz uçuş yok. + ile roster'daki uçuşlarını ekle." : "Başka uçuş yok.")
+                        Text(store.upcoming.isEmpty ? L("Henüz uçuş yok. + ile roster'daki uçuşlarını ekle.", "No flights yet. Add your roster flights with +.") : L("Başka uçuş yok.", "No other flights."))
                             .font(.subheadline).foregroundStyle(Palette.secondary)
                     }
                     ForEach(store.upcoming.dropFirst()) { f in
                         row(f)
                             .swipeActions {
-                                Button("Sil", role: .destructive) { store.delete(f) }
+                                Button(L("Sil", "Delete"), role: .destructive) { store.delete(f) }
                             }
                     }
                 } header: {
-                    Text("Sonraki uçuşlar")
+                    Text(L("Sonraki uçuşlar", "Upcoming flights"))
                 } footer: {
-                    Text("Silmek için sola kaydır." + (leaveMinutes > 0 ? " Çıkış bildirimi: imzadan \(Display.minutes(leaveMinutes)) önce." : ""))
+                    Text(L("Silmek için sola kaydır.", "Swipe left to delete.") + (leaveMinutes > 0 ? L(" Çıkış bildirimi: imzadan \(Display.minutes(leaveMinutes)) önce.", " Leave alert: \(Display.minutes(leaveMinutes)) before sign-on.") : ""))
                 }
 
                 Section {
                     HStack {
-                        TextField("Sefer (1751) ya da tescil (LTD)", text: $query)
+                        TextField(L("Sefer (1751) ya da tescil (LTD)", "Flight (1751) or registration (LTD)"), text: $query)
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                             .focused($focused)
@@ -54,14 +54,14 @@ struct FlightsView: View {
                         if model.loading { ProgressView() }
                     }
                     Button(action: search) {
-                        Label("Bul ve takibi başlat", systemImage: "airplane.departure").frame(maxWidth: .infinity)
+                        Label(L("Bul ve takibi başlat", "Find and start tracking"), systemImage: "airplane.departure").frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.loading || query.trimmingCharacters(in: .whitespaces).isEmpty)
                 } header: {
-                    Text("Hızlı arama")
+                    Text(L("Hızlı arama", "Quick search"))
                 } footer: {
-                    Text("Bilgi İGA CDM'den alınır. İmza = EOBT − 1:15.")
+                    Text(L("Bilgi İGA CDM'den alınır. İmza = EOBT − 1:15.", "Data from İGA CDM. Sign-on = EOBT − 1:15."))
                 }
 
                 // FAB'ın altında boşluk
@@ -69,15 +69,15 @@ struct FlightsView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Palette.bg)
-            .navigationTitle("Uçuşlarım")
+            .navigationTitle(L("Uçuşlarım", "My Flights"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { model.showSettings = true } label: { Image(systemName: "gearshape") }
-                        .accessibilityLabel("Ayarlar")
+                        .accessibilityLabel(L("Ayarlar", "Settings"))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { model.showAdd = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Uçuş ekle")
+                        .accessibilityLabel(L("Uçuş ekle", "Add flight"))
                 }
             }
             .overlay(alignment: .bottomTrailing) {
@@ -89,7 +89,7 @@ struct FlightsView: View {
                         .background(Palette.ret, in: Circle())
                         .shadow(color: Palette.ret.opacity(0.35), radius: 12, y: 6)
                 }
-                .accessibilityLabel("Uçuş ekle")
+                .accessibilityLabel(L("Uçuş ekle", "Add flight"))
                 .padding(20)
             }
         }
@@ -111,7 +111,7 @@ struct FlightsView: View {
                 }
                 Spacer()
                 if isActive {
-                    Text("Takip ediliyor").font(.caption.bold()).foregroundStyle(Palette.outbound)
+                    Text(L("Takip ediliyor", "Tracking")).font(.caption.bold()).foregroundStyle(Palette.outbound)
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(Palette.outbound.opacity(0.15), in: Capsule())
                 }
@@ -121,7 +121,7 @@ struct FlightsView: View {
             } label: {
                 HStack {
                     if model.loading { ProgressView().tint(.white) } else { Image(systemName: isActive ? "arrow.clockwise" : "location.fill") }
-                    Text(isActive ? "Takibi yenile" : "Takibi başlat")
+                    Text(isActive ? L("Takibi yenile", "Refresh tracking") : L("Takibi başlat", "Start tracking"))
                 }
                 .font(.headline)
                 .frame(maxWidth: .infinity)
@@ -162,16 +162,16 @@ struct FlightsView: View {
     private var utcCal: Calendar { UTC.calendar }
 
     private func dayText(_ d: Date) -> String {
-        if utcCal.isDateInToday(d) { return "Bugün · " + UTCFormat.day(d) + " (UTC)" }
-        if utcCal.isDateInTomorrow(d) { return "Yarın · " + UTCFormat.day(d) + " (UTC)" }
+        if utcCal.isDateInToday(d) { return L("Bugün", "Today") + " · " + UTCFormat.day(d) + " (UTC)" }
+        if utcCal.isDateInTomorrow(d) { return L("Yarın", "Tomorrow") + " · " + UTCFormat.day(d) + " (UTC)" }
         return UTCFormat.day(d) + " (UTC)"
     }
 
     private func weekday(_ d: Date) -> String {
         var st = Date.FormatStyle.dateTime.weekday(.abbreviated)
         st.timeZone = UTC.zone
-        st.locale = Locale(identifier: "tr_TR")
-        return d.formatted(st).uppercased(with: Locale(identifier: "tr_TR"))
+        st.locale = Lang.locale
+        return d.formatted(st).uppercased(with: Lang.locale)
     }
 
     private func dayNum(_ d: Date) -> String { String(utcCal.component(.day, from: d)) }

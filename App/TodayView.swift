@@ -32,7 +32,7 @@ struct TodayView: View {
                 }
             }
             .background(Palette.bg)
-            .navigationTitle("Bugün")
+            .navigationTitle(L("Bugün", "Today"))
             .toolbar { CommonToolbar() }
             .refreshable { await model.refresh() }
         }
@@ -58,7 +58,7 @@ struct TodayView: View {
             }
             HStack(spacing: 10) {
                 if let leave = s.upcomingLeave() {
-                    counter(title: "Evden çıkışa", target: leave, color: Palette.outbound)
+                    counter(title: L("Evden çıkışa", "Leave home"), target: leave, color: Palette.outbound)
                 }
                 let next = nextEvent(s)
                 counter(title: next.title, target: next.date, color: next.color)
@@ -90,14 +90,14 @@ struct TodayView: View {
         let now = Date()
         let dep = s.tsat ?? s.tobt ?? s.eobt
         let steps: [(String, Date?, Color)] = [
-            ("İmzaya · \(FlightHelpers.hm(s.signOn))", s.signOn, Palette.signOn),
-            ("Kalkışa · \(FlightHelpers.hm(dep))", dep, Palette.outbound),
-            ("Varışa · \(FlightHelpers.hm(s.turn?.outboundArrival))", s.turn?.outboundArrival, Palette.outbound),
-            ("Dönüş kalkışa · \(FlightHelpers.hm(s.turn?.returnDeparture))", s.turn?.returnDeparture, Palette.ret),
-            ("İnişe · \(FlightHelpers.hm(s.turn?.returnArrival))", s.turn?.returnArrival, Palette.ret),
+            (L("İmzaya", "To sign-on") + " · \(FlightHelpers.hm(s.signOn))", s.signOn, Palette.signOn),
+            (L("Kalkışa", "To departure") + " · \(FlightHelpers.hm(dep))", dep, Palette.outbound),
+            (L("Varışa", "To arrival") + " · \(FlightHelpers.hm(s.turn?.outboundArrival))", s.turn?.outboundArrival, Palette.outbound),
+            (L("Dönüş kalkışa", "To return departure") + " · \(FlightHelpers.hm(s.turn?.returnDeparture))", s.turn?.returnDeparture, Palette.ret),
+            (L("İnişe", "To landing") + " · \(FlightHelpers.hm(s.turn?.returnArrival))", s.turn?.returnArrival, Palette.ret),
         ]
         for (t, d, c) in steps { if let d, d > now { return (t, d, c) } }
-        return ("İmza · \(FlightHelpers.hm(s.signOn))", s.signOn, Palette.signOn)
+        return (L("İmza", "Sign-on") + " · \(FlightHelpers.hm(s.signOn))", s.signOn, Palette.signOn)
     }
 
     @ViewBuilder
@@ -109,7 +109,7 @@ struct TodayView: View {
                     Image(systemName: items.isEmpty ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .foregroundStyle(items.isEmpty ? Palette.outbound : Palette.warn)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(items.isEmpty ? "Dikkat çeken bir durum yok" : "\(items.count) önemli durum")
+                        Text(items.isEmpty ? L("Dikkat çeken bir durum yok", "Nothing notable") : L("\(items.count) önemli durum", "\(items.count) notable items"))
                             .font(.subheadline.bold())
                             .foregroundStyle(items.isEmpty ? Palette.outbound : Color(red: 1, green: 0.76, blue: 0.4))
                         if !items.isEmpty {
@@ -132,14 +132,14 @@ struct TodayView: View {
     private func tiles(_ s: FlightAttributes.ContentState) -> some View {
         let cols = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
         let dest = s.turn.flatMap { FlightHelpers.destGate($0) }
-        let destCode = s.turn.map { $0.destIATA.isEmpty ? $0.destICAO : $0.destIATA } ?? "Varış"
+        let destCode = s.turn.map { $0.destIATA.isEmpty ? $0.destICAO : $0.destIATA } ?? L("Varış", "Arrival")
         return LazyVGrid(columns: cols, spacing: 8) {
             Tile(title: "Gate", value: s.gate)
-            Tile(title: "Pist", value: s.runway)
+            Tile(title: L("Pist", "Runway"), value: s.runway)
             Tile(title: "TOBT", value: s.tobt.map { FlightHelpers.hm($0) } ?? "")
             Tile(title: "TSAT", value: s.tsat.map { FlightHelpers.hm($0) } ?? "")
             Tile(title: "CTOT", value: s.ctot.map { FlightHelpers.hm($0) } ?? "")
-            Tile(title: "\(destCode) kapı", value: dest.map { $0.isEstimate ? "~\($0.gate)" : $0.gate } ?? "")
+            Tile(title: "\(destCode) " + L("kapı", "gate"), value: dest.map { $0.isEstimate ? "~\($0.gate)" : $0.gate } ?? "")
         }
         .onTapGesture { model.tab = .tour }
     }
@@ -152,11 +152,11 @@ struct TodayView: View {
                     Image(systemName: "airplane.arrival").font(.title3).foregroundStyle(Palette.secondary)
                     VStack(alignment: .leading, spacing: 2) {
                         if let ib = s.freshInbound {
-                            Text("Gelen uçak · \(Display.text(ib.fromCode))").font(.subheadline.bold())
+                            Text(L("Gelen uçak", "Inbound") + " · \(Display.text(ib.fromCode))").font(.subheadline.bold())
                             inboundSubtitle(ib).font(.caption).foregroundStyle(Palette.secondary)
                         } else {
-                            Text("Uçak \(Display.text(s.registration))").font(.subheadline.bold())
-                            Text("Geliş bilgisi yok").font(.caption).foregroundStyle(Palette.secondary)
+                            Text(L("Uçak", "Aircraft") + " \(Display.text(s.registration))").font(.subheadline.bold())
+                            Text(L("Geliş bilgisi yok", "No inbound info")).font(.caption).foregroundStyle(Palette.secondary)
                         }
                     }
                     Spacer()
@@ -166,7 +166,7 @@ struct TodayView: View {
                                 .padding(.horizontal, 12).padding(.vertical, 10)
                                 .background(Palette.card2, in: RoundedRectangle(cornerRadius: 12))
                         }
-                        .accessibilityLabel("Flightradar24'te aç")
+                        .accessibilityLabel(L("Flightradar24'te aç", "Open in Flightradar24"))
                     }
                 }
             }
@@ -177,13 +177,13 @@ struct TodayView: View {
     private func inboundSubtitle(_ ib: InboundInfo) -> some View {
         if let parked = ib.parked {
             HStack(spacing: 4) {
-                Text("Park \(ib.approx)\(DayClock.text(parked)) ·")
+                Text(L("Park", "Parked") + " \(ib.approx)\(DayClock.text(parked)) ·")
                 MinutesAgo(date: parked)
             }
         } else if let landed = ib.landed {
-            Text("İndi \(FlightHelpers.hm(landed)) · parkta ~\(FlightHelpers.hm(ib.estimatedPark))")
+            Text(L("İndi \(FlightHelpers.hm(landed)) · parkta ~\(FlightHelpers.hm(ib.estimatedPark))", "Landed \(FlightHelpers.hm(landed)) · on stand ~\(FlightHelpers.hm(ib.estimatedPark))"))
         } else {
-            Text("Tahmini iniş \(FlightHelpers.hm(ib.estimatedLanding)) · parkta ~\(FlightHelpers.hm(ib.estimatedPark))")
+            Text(L("Tahmini iniş \(FlightHelpers.hm(ib.estimatedLanding)) · parkta ~\(FlightHelpers.hm(ib.estimatedPark))", "Est. landing \(FlightHelpers.hm(ib.estimatedLanding)) · on stand ~\(FlightHelpers.hm(ib.estimatedPark))"))
         }
     }
 
@@ -201,12 +201,12 @@ struct TodayView: View {
 
     private func footer(_ s: FlightAttributes.ContentState) -> some View {
         VStack(spacing: 10) {
-            Text("Son güncelleme \(s.updatedAt.formatted(.dateTime.hour().minute().second())) · yenilemek için aşağı çek")
+            Text(L("Son güncelleme \(s.updatedAt.formatted(.dateTime.hour().minute().second())) · yenilemek için aşağı çek", "Last update \(s.updatedAt.formatted(.dateTime.hour().minute().second())) · pull down to refresh"))
                 .font(.caption).foregroundStyle(Palette.secondary)
             Button(role: .destructive) {
                 Task { await model.remove() }
             } label: {
-                Text("Uçuşu kaldır").font(.subheadline).frame(maxWidth: .infinity).padding(.vertical, 4)
+                Text(L("Uçuşu kaldır", "Remove flight")).font(.subheadline).frame(maxWidth: .infinity).padding(.vertical, 4)
             }
             .buttonStyle(.bordered)
         }

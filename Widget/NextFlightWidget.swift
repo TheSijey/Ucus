@@ -60,8 +60,8 @@ struct NextFlightWidget: Widget {
             NextFlightView(entry: entry)
                 .widgetURL(URL(string: "ucus://open"))
         }
-        .configurationDisplayName("Sıradaki uçuş")
-        .description("Ada'daki uçuşun standı ve imza sayacı ya da listendeki sıradaki uçuş.")
+        .configurationDisplayName(L("Sıradaki uçuş", "Next flight"))
+        .description(L("Takip edilen uçuşun standı ve imza sayacı ya da listendeki sıradaki uçuş.", "Stand and sign-on countdown of the tracked flight, or the next flight in your list."))
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryInline, .accessoryCircular])
     }
 }
@@ -102,7 +102,7 @@ struct NextFlightView: View {
         } else if let p = entry.planned.first {
             Text("\(p.flight) · \(dayText(p.date))")
         } else {
-            Text("Uçuş yok")
+            Text(L("Uçuş yok", "No flight"))
         }
     }
 
@@ -125,19 +125,19 @@ struct NextFlightView: View {
                 Text("\(a.flight) · \(Display.text(a.stand))").font(.headline)
                 Text(shortReg(a.registration)).font(.caption)
                 HStack(spacing: 3) {
-                    Text(a.leaveAt != nil ? "Çıkışa" : "İmzaya")
+                    Text(a.leaveAt != nil ? L("Çıkışa", "Leave") : L("İmzaya", "Sign-on"))
                     Countdown(target: a.leaveAt ?? a.signOn)
                 }
                 .font(.caption.bold())
             }
         } else if let p = entry.planned.first {
             VStack(alignment: .leading, spacing: 1) {
-                Text("Sıradaki uçuş").font(.caption)
+                Text(L("Sıradaki uçuş", "Next flight")).font(.caption)
                 Text(p.flight).font(.headline)
                 Text(dayText(p.date)).font(.caption)
             }
         } else {
-            Text("Uçuşlarım listesi boş").font(.caption)
+            Text(L("Uçuşlarım listesi boş", "My Flights list is empty")).font(.caption)
         }
     }
 
@@ -204,7 +204,7 @@ struct NextFlightView: View {
                 .foregroundStyle(.green)
             }
             HStack(spacing: 3) {
-                Text("İmza").foregroundStyle(.white.opacity(0.6))
+                Text(L("İmza", "Sign-on")).foregroundStyle(.white.opacity(0.6))
                 Countdown(target: a.signOn)
             }
             .foregroundStyle(.yellow)
@@ -213,9 +213,9 @@ struct NextFlightView: View {
 
     private func plannedList(limit: Int) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Sıradaki uçuşlar").font(.caption).foregroundStyle(.white.opacity(0.6))
+            Text(L("Sıradaki uçuşlar", "Upcoming flights")).font(.caption).foregroundStyle(.white.opacity(0.6))
             if entry.planned.isEmpty {
-                Text("Liste boş").font(.subheadline)
+                Text(L("Liste boş", "List empty")).font(.subheadline)
             }
             ForEach(entry.planned.prefix(limit), id: \.self) { p in
                 VStack(alignment: .leading, spacing: 0) {
@@ -235,11 +235,11 @@ struct NextFlightView: View {
     private func dayText(_ d: Date) -> String {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!
-        if cal.isDateInToday(d) { return "Bugün (UTC)" }
-        if cal.isDateInTomorrow(d) { return "Yarın (UTC)" }
+        if cal.isDateInToday(d) { return L("Bugün (UTC)", "Today (UTC)") }
+        if cal.isDateInTomorrow(d) { return L("Yarın (UTC)", "Tomorrow (UTC)") }
         var st = Date.FormatStyle.dateTime.day().month(.abbreviated).weekday(.abbreviated)
         st.timeZone = TimeZone(identifier: "UTC")!
-        st.locale = Locale(identifier: "tr_TR")
+        st.locale = Lang.locale
         return d.formatted(st)
     }
 }

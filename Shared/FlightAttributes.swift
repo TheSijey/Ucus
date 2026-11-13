@@ -70,8 +70,8 @@ enum DayClock {
         let cal = Calendar.current
         let t = d.formatted(.dateTime.hour().minute())
         if cal.isDateInToday(d) { return t }
-        if cal.isDateInYesterday(d) { return "dün \(t)" }
-        return d.formatted(.dateTime.day().month(.abbreviated).hour().minute())
+        if cal.isDateInYesterday(d) { return L("dün \(t)", "yesterday \(t)") }
+        return d.formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(Lang.locale))
     }
 }
 
@@ -118,13 +118,13 @@ struct PhaseCountdown: View {
         if let leave = state.upcomingLeave() {
             HStack(spacing: 3) {
                 if showIcon { Image(systemName: "house.fill").font(.system(size: 8)) }
-                if showLabel { Text("Çıkışa").foregroundStyle(.secondary) }
+                if showLabel { Text(L("Çıkışa", "Leave")).foregroundStyle(.secondary) }
                 Countdown(target: leave)
             }
             .foregroundStyle(.green)
         } else {
             HStack(spacing: 3) {
-                if showLabel { Text("İmzaya").foregroundStyle(.secondary) }
+                if showLabel { Text(L("İmzaya", "Sign-on")).foregroundStyle(.secondary) }
                 Countdown(target: state.signOn)
             }
             .foregroundStyle(.yellow)
@@ -139,9 +139,9 @@ enum Display {
     static func minutes(_ m: Int) -> String {
         let h = m / 60, r = m % 60
         switch (h, r) {
-        case (0, _): return "\(r) dk"
-        case (_, 0): return "\(h) saat"
-        default: return "\(h) saat \(r) dk"
+        case (0, _): return L("\(r) dk", "\(r) min")
+        case (_, 0): return L("\(h) saat", "\(h) h")
+        default: return L("\(h) saat \(r) dk", "\(h) h \(r) min")
         }
     }
 }
@@ -149,7 +149,7 @@ enum Display {
 /// "47 dk önce" / "2 sa 5 dk önce" – saniyesiz, dakikada bir güncellenir.
 struct MinutesAgo: View {
     let date: Date
-    var suffix = " önce"
+    var suffix = L(" önce", " ago")
 
     var body: some View {
         TimelineView(.everyMinute) { ctx in
@@ -159,8 +159,8 @@ struct MinutesAgo: View {
 
     static func text(from: Date, to: Date) -> String {
         let m = max(0, Int(to.timeIntervalSince(from) / 60))
-        if m < 60 { return "\(m) dk" }
-        return m % 60 == 0 ? "\(m / 60) sa" : "\(m / 60) sa \(m % 60) dk"
+        if m < 60 { return L("\(m) dk", "\(m) min") }
+        return m % 60 == 0 ? L("\(m / 60) sa", "\(m / 60) h") : L("\(m / 60) sa \(m % 60) dk", "\(m / 60) h \(m % 60) min")
     }
 }
 

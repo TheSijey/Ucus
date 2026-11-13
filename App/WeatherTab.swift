@@ -15,7 +15,7 @@ struct WeatherTab: View {
                     let airports = FlightHelpers.airports(s)
                     VStack(spacing: 12) {
                         if airports.count > 1 {
-                            Picker("Meydan", selection: $selected) {
+                            Picker(L("Meydan", "Airport"), selection: $selected) {
                                 ForEach(airports, id: \.self) { icao in
                                     Text(label(icao, s)).tag(icao)
                                 }
@@ -35,9 +35,9 @@ struct WeatherTab: View {
                         } else if loading {
                             ProgressView().padding(40)
                         } else {
-                            Text("Hava durumu alınamadı.").foregroundStyle(Palette.secondary).padding(40)
+                            Text(L("Hava durumu alınamadı.", "Couldn't load weather.")).foregroundStyle(Palette.secondary).padding(40)
                         }
-                        Text("Kaynak: aviationweather.gov · 10 dk'da bir yenilenir · bilgi amaçlıdır")
+                        Text(L("Kaynak: aviationweather.gov · 10 dk'da bir yenilenir · bilgi amaçlıdır", "Source: aviationweather.gov · refreshed every 10 min · for information only"))
                             .font(.caption2).foregroundStyle(Palette.secondary)
                     }
                     .padding(16)
@@ -53,7 +53,7 @@ struct WeatherTab: View {
                 }
             }
             .background(Palette.bg)
-            .navigationTitle("Hava")
+            .navigationTitle(L("Hava", "Weather"))
             .toolbar { CommonToolbar() }
             .refreshable { await model.refresh() }
         }
@@ -73,9 +73,9 @@ struct WeatherTab: View {
         if !items.isEmpty {
             Card {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Önemli durumlar").font(.headline)
+                    Text(L("Önemli durumlar", "Notable items")).font(.headline)
                     if list.isEmpty {
-                        Label("Dikkat çeken bir durum yok", systemImage: "checkmark.circle.fill")
+                        Label(L("Dikkat çeken bir durum yok", "Nothing notable"), systemImage: "checkmark.circle.fill")
                             .font(.subheadline).foregroundStyle(Palette.outbound)
                     }
                     ForEach(list, id: \.self) { h in
@@ -106,13 +106,13 @@ struct WeatherTab: View {
                 if let m = w.metar {
                     let sum = MetarSummary(m)
                     HStack(spacing: 8) {
-                        Tile(title: "Rüzgâr", value: sum.wind)
-                        Tile(title: "Görüş", value: sum.visibility)
+                        Tile(title: L("Rüzgâr", "Wind"), value: sum.wind)
+                        Tile(title: L("Görüş", "Visibility"), value: sum.visibility)
                         Tile(title: "QNH", value: sum.qnh)
                     }
                     Text(m).font(.caption.monospaced()).foregroundStyle(.white.opacity(0.85)).textSelection(.enabled)
                 } else {
-                    Text("METAR yok").foregroundStyle(Palette.secondary)
+                    Text(L("METAR yok", "No METAR")).foregroundStyle(Palette.secondary)
                 }
             }
         }
@@ -158,7 +158,7 @@ struct WeatherTab: View {
             ? .teal : hits.first.map { $0.isReturn ? Palette.ret : Palette.outbound }
         return VStack(alignment: .leading, spacing: 3) {
             if !hits.isEmpty {
-                Text(hits.map { "\($0.label) \(FlightHelpers.utc($0.time))" }.joined(separator: " · ") + " · geçerli")
+                Text(hits.map { "\($0.label) \(FlightHelpers.utc($0.time))" }.joined(separator: " · ") + L(" · geçerli", " · applies"))
                     .font(.caption.bold()).foregroundStyle(tint ?? .white)
             }
             Text(g.text).font(.caption.monospaced())
@@ -208,8 +208,8 @@ struct RunwayWindCard: View {
             Card {
                 if wind.direction == nil {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Pist rüzgârı").font(.headline)
-                        Text("Rüzgâr değişken \(wind.speed) kt").font(.subheadline).foregroundStyle(Palette.secondary)
+                        Text(L("Pist rüzgârı", "Runway wind")).font(.headline)
+                        Text(L("Rüzgâr değişken \(wind.speed) kt", "Wind variable \(wind.speed) kt")).font(.subheadline).foregroundStyle(Palette.secondary)
                     }
                 } else {
                     content(wind: wind, comps: WindCalc.components(wind: wind, runways: weather.runways))
@@ -225,8 +225,8 @@ struct RunwayWindCard: View {
         if let c = current {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Pist \(c.runway)").font(.headline)
-                    Text("· \(String(format: "%03d", c.heading))°" + (c.lengthM.map { " · \($0.formatted(.number.locale(Locale(identifier: "tr_TR")))) m" } ?? ""))
+                    Text(L("Pist", "Runway") + " \(c.runway)").font(.headline)
+                    Text("· \(String(format: "%03d", c.heading))°" + (c.lengthM.map { " · \($0.formatted(.number.locale(Lang.locale))) m" } ?? ""))
                         .font(.subheadline).foregroundStyle(Palette.secondary)
                     Spacer()
                     if let tag = tag(for: c.runway, pick: pick) {
@@ -256,16 +256,16 @@ struct RunwayWindCard: View {
     }
 
     private func defaultPick(_ comps: [RunwayWind]) -> (runway: String, reason: String) {
-        if !active.isEmpty, comps.contains(where: { $0.runway == active }) { return (active, "aktif") }
+        if !active.isEmpty, comps.contains(where: { $0.runway == active }) { return (active, L("aktif", "active")) }
         if let h = FlightHelpers.mostCommon(history), comps.contains(where: { $0.runway == h }) {
-            return (h, "son seferlerde \(h)")
+            return (h, L("son seferlerde \(h)", "recently \(h)"))
         }
-        return (comps.first?.runway ?? "", "rüzgâra göre muhtemel")
+        return (comps.first?.runway ?? "", L("rüzgâra göre muhtemel", "likely by wind"))
     }
 
     private func tag(for runway: String, pick: (runway: String, reason: String)) -> String? {
         if runway == pick.runway { return pick.reason }
-        if runway == active { return "aktif" }
+        if runway == active { return L("aktif", "active") }
         return nil
     }
 
@@ -278,7 +278,7 @@ struct RunwayWindCard: View {
             }
             .foregroundStyle(color)
             if let gust, gust != value {
-                Text("hamle \(gust) kt").font(.caption).foregroundStyle(Palette.secondary)
+                Text(L("hamle", "gust") + " \(gust) kt").font(.caption).foregroundStyle(Palette.secondary)
             }
         }
         .fixedSize()
@@ -309,9 +309,9 @@ struct RunwayWindCard: View {
         let headLen = max(12, CGFloat(abs(c.head)) / scale * 34)
         let crossLen = max(12, CGFloat(c.cross) / scale * 40)
         let headColor = c.head >= 0 ? Palette.outbound : Color.red
-        let headLabel = label(abs(c.head), c.head >= 0 ? "karşı" : "arka",
+        let headLabel = label(abs(c.head), c.head >= 0 ? L("karşı", "head") : L("arka", "tail"),
                               gust: c.gustHead.map { abs($0) }, color: headColor)
-        let crossTitle = "yan · \(c.crossFromLeft ? "soldan" : "sağdan")"
+        let crossTitle = L("yan", "cross") + " · " + (c.crossFromLeft ? L("soldan", "from left") : L("sağdan", "from right"))
         let runwayW: CGFloat = 26
 
         return VStack(spacing: 4) {
@@ -345,7 +345,7 @@ struct RunwayWindCard: View {
                         hArrow(right: false, length: crossLen)
                         label(c.cross, crossTitle, gust: c.gustCross, color: Palette.warn)
                     } else if c.cross == 0 {
-                        Text("yan rüzgâr yok").font(.subheadline).foregroundStyle(Palette.secondary)
+                        Text(L("yan rüzgâr yok", "no crosswind")).font(.subheadline).foregroundStyle(Palette.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -357,12 +357,12 @@ struct RunwayWindCard: View {
                     headLabel.frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else if c.head == 0 {
-                Text("karşı/arka rüzgâr yok").font(.subheadline).foregroundStyle(Palette.secondary)
+                Text(L("karşı/arka rüzgâr yok", "no head/tailwind")).font(.subheadline).foregroundStyle(Palette.secondary)
             }
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Pist \(c.runway): \(c.head >= 0 ? "karşı" : "arka") \(abs(c.head)) knot, yan \(c.cross) knot \(c.crossFromLeft ? "soldan" : "sağdan")")
+        .accessibilityLabel(L("Pist \(c.runway): \(c.head >= 0 ? "karşı" : "arka") \(abs(c.head)) knot, yan \(c.cross) knot \(c.crossFromLeft ? "soldan" : "sağdan")", "Runway \(c.runway): \(c.head >= 0 ? "headwind" : "tailwind") \(abs(c.head)) knots, crosswind \(c.cross) knots from the \(c.crossFromLeft ? "left" : "right")"))
     }
 
 }

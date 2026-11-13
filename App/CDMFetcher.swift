@@ -10,16 +10,16 @@ enum CDMError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .empty:
-            return "Uçuş numarası ya da tescil yaz."
+            return L("Uçuş numarası ya da tescil yaz.", "Enter a flight number or registration.")
         case .notFound(let pageText):
             let snippet = pageText
                 .components(separatedBy: .whitespacesAndNewlines)
                 .filter { !$0.isEmpty }
                 .joined(separator: " ")
                 .prefix(300)
-            return "CDM'den okunamadı.\n\nSayfada görünen: \(snippet.isEmpty ? "(boş)" : String(snippet))"
+            return L("CDM'den okunamadı.\n\nSayfada görünen: ", "Couldn't read CDM.\n\nPage shows: ") + (snippet.isEmpty ? L("(boş)", "(empty)") : String(snippet))
         case .otherFlight(let asked, let got):
-            return "CDM'de \(asked) bulunamadı; arama \(got) uçuşunu getirdi. Uçuş CDM'de henüz görünmüyor olabilir, biraz sonra tekrar dene."
+            return L("CDM'de \(asked) bulunamadı; arama \(got) uçuşunu getirdi. Uçuş CDM'de henüz görünmüyor olabilir, biraz sonra tekrar dene.", "\(asked) not found in CDM; the search returned \(got). The flight may not be in CDM yet, try again a bit later.")
         }
     }
 }

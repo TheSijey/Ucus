@@ -144,7 +144,7 @@ struct LockScreenView: View {
                         .foregroundStyle(.green)
                         .frame(maxWidth: 70, alignment: .leading)
                 }
-                Text("İmzaya").font(.caption).foregroundStyle(.white.opacity(0.6))
+                Text(L("İmzaya", "Sign-on")).font(.caption).foregroundStyle(.white.opacity(0.6))
                 Countdown(target: state.signOn)
                     .font(.subheadline.bold())
                     .foregroundStyle(.yellow)
@@ -155,7 +155,7 @@ struct LockScreenView: View {
             }
             // 5) Saatler tek satır          ↻
             HStack(spacing: 8) {
-                timeInline("İmza", state.signOn)
+                timeInline(L("İmza", "S/O"), state.signOn)
                 timeInline("TOBT", state.tobt)
                 timeInline("TSAT", state.tsat)
                 timeInline("CTOT", state.ctot)
@@ -167,7 +167,7 @@ struct LockScreenView: View {
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             if stale {
-                Text("Süre doldu").font(.caption2).foregroundStyle(.orange)
+                Text(L("Süre doldu", "Expired")).font(.caption2).foregroundStyle(.orange)
             }
         }
         .padding(.horizontal, 26)
@@ -206,7 +206,7 @@ struct InboundLine: View {
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: "airplane.arrival")
-            Text("Geliş").foregroundStyle(.white.opacity(0.6))
+            Text(L("Geliş", "Inbound")).foregroundStyle(.white.opacity(0.6))
             Text(info.fromCode.isEmpty ? "—" : info.fromCode).bold()
             Text("·")
             if let parked = info.parked {
@@ -215,12 +215,12 @@ struct InboundLine: View {
                 Text("·")
                 // iOS kendi işletir; sadece saat ve dakika (saniyesiz)
                 Text(.currentDate, format: .offset(to: parked, allowedFields: [.hour, .minute], sign: .never))
-                Text("önce")
+                Text(L("önce", "ago"))
             } else if let est = info.estimatedPark {
-                Text(info.landed != nil ? "indi, parkta ~" : "parkta ~")
+                Text(info.landed != nil ? L("indi, parkta ~", "landed, on stand ~") : L("parkta ~", "on stand ~"))
                 Text(est, format: .dateTime.hour().minute()).bold()
             } else {
-                Text("bilgi yok")
+                Text(L("bilgi yok", "no data"))
             }
         }
         .font(.caption2)

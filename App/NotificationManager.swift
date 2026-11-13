@@ -17,8 +17,8 @@ enum NotificationManager {
         await requestAuthorization()
 
         let content = UNMutableNotificationContent()
-        content.title = "\(flight) – Çıkma vakti"
-        content.body = "İmzaya \(Display.minutes(minutesBeforeSignOn))."
+        content.title = L("\(flight) – Çıkma vakti", "\(flight) – Time to leave")
+        content.body = L("İmzaya \(Display.minutes(minutesBeforeSignOn)).", "\(Display.minutes(minutesBeforeSignOn)) to sign-on.")
         content.sound = chime
         content.interruptionLevel = .active
 
@@ -36,8 +36,8 @@ enum NotificationManager {
     static func test() async {
         await requestAuthorization()
         let content = UNMutableNotificationContent()
-        content.title = "Uçuş – deneme"
-        content.body = "Çıkış bildirimi böyle gelecek."
+        content.title = L("Uçuş – deneme", "Uçuş – test")
+        content.body = L("Çıkış bildirimi böyle gelecek.", "This is how the leave alert will look.")
         content.sound = chime
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
         try? await UNUserNotificationCenter.current().add(

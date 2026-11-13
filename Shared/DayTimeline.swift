@@ -52,9 +52,9 @@ struct DayTimelineBar: View {
                     .fixedSize(horizontal: false, vertical: true)
                 } else {
                     VStack(alignment: .leading, spacing: 3) {
-                        row(.gray, "İmza", data.signOn, nil, nil)
-                        row(.green, "Gidiş", data.outDep, data.outArr, data.destCode)
-                        if data.retDep != nil { row(.blue, "Dönüş", data.retDep, data.retArr, "IST") }
+                        row(.gray, L("İmza", "Sign-on"), data.signOn, nil, nil)
+                        row(.green, L("Gidiş", "Outbound"), data.outDep, data.outArr, data.destCode)
+                        if data.retDep != nil { row(.blue, L("Dönüş", "Return"), data.retDep, data.retArr, "IST") }
                     }
                     .font(.caption.monospacedDigit())
                 }

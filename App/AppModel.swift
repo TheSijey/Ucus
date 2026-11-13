@@ -48,7 +48,7 @@ final class AppModel: ObservableObject {
                 if !cal.isDate(departure, inSameDayAs: plannedDay), !cal.isDate(state.signOn, inSameDayAs: plannedDay) {
                     pending = PendingStart(
                         query: q, state: state,
-                        message: "CDM şu an \(state.flight) için \(UTCFormat.dayTime(departure)) UTC kalkışlı uçuşu gösteriyor. Bu senin \(UTCFormat.day(plannedDay)) (UTC) uçuşun olmayabilir; CDM o günün uçuşunu genelde aynı gün gösterir.")
+                        message: L("CDM şu an \(state.flight) için \(UTCFormat.dayTime(departure)) UTC kalkışlı uçuşu gösteriyor. Bu senin \(UTCFormat.day(plannedDay)) (UTC) uçuşun olmayabilir; CDM o günün uçuşunu genelde aynı gün gösterir.", "CDM currently shows \(state.flight) departing \(UTCFormat.dayTime(departure)) UTC. This may not be your \(UTCFormat.day(plannedDay)) (UTC) flight; CDM usually shows a day's flight on that same day."))
                     return
                 }
             }
@@ -60,11 +60,11 @@ final class AppModel: ObservableObject {
 
     func begin(query: String, state: FlightAttributes.ContentState) async {
         if state.tourEnd <= Date() {
-            error = "Bu uçuşun turu bitmiş görünüyor, eklenmedi."
+            error = L("Bu uçuşun turu bitmiş görünüyor, eklenmedi.", "This flight's trip seems to be over; not added.")
             return
         }
         if state.hideAt > Date(), !ActivityAuthorizationInfo().areActivitiesEnabled {
-            error = "Ayarlar > Uçuş > Canlı Etkinlikler'i aç."
+            error = L("Ayarlar > Uçuş > Canlı Etkinlikler'i aç.", "Turn on Settings > Uçuş > Live Activities.")
         }
         do {
             try await LiveActivityManager.start(query: query, state: state)
@@ -86,11 +86,11 @@ final class AppModel: ObservableObject {
         defer { loading = false }
         let oldSignOn = session.state?.signOn
         if let err = await FlightRefresher.refreshActive() {
-            refreshNote = "Yenilenemedi: \(err)"
+            refreshNote = L("Yenilenemedi: \(err)", "Couldn't refresh: \(err)")
         } else {
-            var note = "✓ Güncellendi \(Date().formatted(.dateTime.hour().minute()))"
+            var note = "✓ " + L("Güncellendi", "Updated") + " \(Date().formatted(.dateTime.hour().minute()))"
             if let oldSignOn, let new = session.state?.signOn, new != oldSignOn {
-                note += " · İmza \(new.formatted(.dateTime.hour().minute())) oldu"
+                note += L(" · İmza \(new.formatted(.dateTime.hour().minute())) oldu", " · Sign-on now \(new.formatted(.dateTime.hour().minute()))")
             }
             refreshNote = note
         }
@@ -119,12 +119,12 @@ enum FlightHelpers {
     static func weatherEvents(_ s: FlightAttributes.ContentState) -> [String: [WeatherEvent]] {
         var ev: [String: [WeatherEvent]] = [:]
         var ist: [WeatherEvent] = []
-        if let dep = s.tsat ?? s.tobt ?? s.eobt { ist.append(WeatherEvent(label: "Kalkış", time: dep, isReturn: false)) }
+        if let dep = s.tsat ?? s.tobt ?? s.eobt { ist.append(WeatherEvent(label: L("Kalkış", "Departure"), time: dep, isReturn: false)) }
         if let t = s.turn {
-            if let ra = t.returnArrival { ist.append(WeatherEvent(label: "Dönüş iniş", time: ra, isReturn: true)) }
+            if let ra = t.returnArrival { ist.append(WeatherEvent(label: L("Dönüş iniş", "Return landing"), time: ra, isReturn: true)) }
             var dst: [WeatherEvent] = []
-            if let a = t.outboundArrival { dst.append(WeatherEvent(label: "İniş", time: a, isReturn: false)) }
-            if let rd = t.returnDeparture { dst.append(WeatherEvent(label: "Dönüş kalkış", time: rd, isReturn: true)) }
+            if let a = t.outboundArrival { dst.append(WeatherEvent(label: L("İniş", "Landing"), time: a, isReturn: false)) }
+            if let rd = t.returnDeparture { dst.append(WeatherEvent(label: L("Dönüş kalkış", "Return departure"), time: rd, isReturn: true)) }
             if !t.destICAO.isEmpty { ev[t.destICAO] = dst }
         }
         ev["LTFM"] = ist
@@ -214,13 +214,13 @@ struct EmptyFlightView: View {
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "airplane.departure").font(.system(size: 44)).foregroundStyle(Palette.secondary)
-            Text("Takip edilen uçuş yok").font(.title3.bold())
-            Text("Uçuşlarım'da bir uçuşa \"Takibi başlat\" de ya da sefer/tescil ara.")
+            Text(L("Takip edilen uçuş yok", "No flight tracked")).font(.title3.bold())
+            Text(L("Uçuşlarım'da bir uçuşa \"Takibi başlat\" de ya da sefer/tescil ara.", "Tap \"Start tracking\" on a flight in My Flights, or search a flight/registration."))
                 .font(.subheadline).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
             Button {
                 model.tab = .flights
             } label: {
-                Text("Uçuşlarım'a git").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+                Text(L("Uçuşlarım'a git", "Go to My Flights")).font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)

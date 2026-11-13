@@ -119,7 +119,7 @@ enum WeatherHighlights {
     private static func tafGroups(_ taf: String) -> [Group] {
         let tokens = taf.split(separator: " ").map(String.init)
         var groups: [Group] = []
-        var header = "ana"
+        var header = L("ana", "base")
         var body: [String] = []
         var i = 0
         func flush() { if !body.isEmpty { groups.append(Group(header: header, body: body.joined(separator: " "))) } }
@@ -150,16 +150,16 @@ enum WeatherHighlights {
         let tokens = text.split(separator: " ").map(String.init)
 
         if let w = Wind.parse(text) {
-            if let g = w.gust { r.append("hamle \(g) kt") }
-            else if w.speed >= 20 { r.append("rüzgâr \(w.speed) kt") }
+            if let g = w.gust { r.append(L("hamle", "gust") + " \(g) kt") }
+            else if w.speed >= 20 { r.append(L("rüzgâr", "wind") + " \(w.speed) kt") }
         }
         // Görüş (4 haneli metre) – rüzgârdan sonra gelen ilk 4 haneli sayı
         for t in tokens where t.range(of: #"^\d{4}$"#, options: .regularExpression) != nil {
-            if let v = Int(t), v < 1500 { r.append("görüş \(v) m") }
+            if let v = Int(t), v < 1500 { r.append(L("görüş", "vis") + " \(v) m") }
             break
         }
         if tokens.contains(where: { $0.hasPrefix("R") && $0.contains("/") && $0.range(of: #"^R\d{2}[LRC]?/"#, options: .regularExpression) != nil }) {
-            r.append("RVR var")
+            r.append(L("RVR var", "RVR reported"))
         }
         // Tavan
         for t in tokens {
@@ -172,10 +172,10 @@ enum WeatherHighlights {
             }
         }
         // Hadiseler
-        let wx: [(String, String)] = [("TS", "oraj"), ("CB", "CB"), ("TCU", "TCU"), ("FZ", "donan yağış/sis"),
-                                      ("SN", "kar"), ("GR", "dolu"), ("GS", "küçük dolu"), ("+RA", "kuvvetli yağmur"),
-                                      ("FG", "sis"), ("SQ", "bora"), ("FC", "hortum"), ("SS", "kum fırtınası"),
-                                      ("DS", "toz fırtınası"), ("PL", "buz taneleri")]
+        let wx: [(String, String)] = [("TS", L("oraj", "thunderstorm")), ("CB", "CB"), ("TCU", "TCU"), ("FZ", L("donan yağış/sis", "freezing precip/fog")),
+                                      ("SN", L("kar", "snow")), ("GR", L("dolu", "hail")), ("GS", L("küçük dolu", "small hail")), ("+RA", L("kuvvetli yağmur", "heavy rain")),
+                                      ("FG", L("sis", "fog")), ("SQ", L("bora", "squall")), ("FC", L("hortum", "funnel cloud")), ("SS", L("kum fırtınası", "sandstorm")),
+                                      ("DS", L("toz fırtınası", "duststorm")), ("PL", L("buz taneleri", "ice pellets"))]
         for (code, name) in wx where tokens.contains(where: { tok in
             code == "CB" || code == "TCU" ? tok.hasSuffix(code) : tok.contains(code) && !tok.hasPrefix("RE")
         }) {

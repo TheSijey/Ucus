@@ -8,7 +8,7 @@ settings:
   base:
     DEVELOPMENT_TEAM: ${APPLE_TEAM_ID}
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "1.7.1"
+    MARKETING_VERSION: "1.8.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1"
@@ -27,6 +27,7 @@ targets:
         CFBundleDisplayName: Uçuş
         CFBundleDevelopmentRegion: tr
         CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleLocalizations: [tr, en]
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSSupportsLiveActivities: true
         UILaunchScreen: {}
@@ -55,6 +56,7 @@ targets:
       properties:
         CFBundleDisplayName: Uçuş
         CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleLocalizations: [tr, en]
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension

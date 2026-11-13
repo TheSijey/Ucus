@@ -153,7 +153,7 @@ enum FlightRefresher {
         let session = FlightSession.shared
         guard let old = session.state, !session.query.isEmpty else {
             DebugLog.add("Yenile: etkin uçuş yok")
-            return "Etkin uçuş yok."
+            return L("Etkin uçuş yok.", "No active flight.")
         }
         DebugLog.add("Yenile başladı \(old.flight)")
         do {

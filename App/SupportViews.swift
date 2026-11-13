@@ -7,7 +7,7 @@ enum UTCFormat {
     private static func style(_ base: Date.FormatStyle) -> Date.FormatStyle {
         var st = base
         st.timeZone = UTC.zone
-        st.locale = Locale(identifier: "tr_TR")
+        st.locale = Lang.locale
         return st
     }
     /// "10 Kasım Pazartesi"
@@ -39,17 +39,17 @@ struct AddFlightView: View {
         NavigationStack {
             Form {
                 Section {
-                    DatePicker("Tarih", selection: $date,
+                    DatePicker(L("Tarih", "Date"), selection: $date,
                                in: UTC.calendar.date(byAdding: .day, value: -1, to: UTC.startOfDay(Date()))!...,
                                displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .environment(\.timeZone, UTC.zone)
-                        .environment(\.locale, Locale(identifier: "tr_TR"))
+                        .environment(\.locale, Lang.locale)
                 } header: {
-                    Text("Tarih (UTC – roster'daki gibi)")
+                    Text(L("Tarih (UTC – roster'daki gibi)", "Date (UTC – as on your roster)"))
                 }
                 Section {
-                    TextField("Sefer (1751 ya da TK1751)", text: $flight)
+                    TextField(L("Sefer (1751 ya da TK1751)", "Flight (1751 or TK1751)"), text: $flight)
                         .font(.title3.monospaced())
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
@@ -58,10 +58,10 @@ struct AddFlightView: View {
                         .submitLabel(.done)
                         .onSubmit(addCurrent)
                 } footer: {
-                    Text("Sadece İstanbul Havalimanı (IST) kalkışlı uçuşlar: bilgiler İGA CDM'den gelir. Ekledikçe takvim bir sonraki güne geçer.")
+                    Text(L("Sadece İstanbul Havalimanı (IST) kalkışlı uçuşlar: bilgiler İGA CDM'den gelir. Ekledikçe takvim bir sonraki güne geçer.", "Istanbul Airport (IST) departures only: data comes from İGA CDM. The date moves to the next day after each add."))
                 }
                 if !added.isEmpty {
-                    Section("Eklenenler") {
+                    Section(L("Eklenenler", "Added")) {
                         ForEach(added, id: \.self) { Text($0) }
                     }
                 }
@@ -69,7 +69,7 @@ struct AddFlightView: View {
             // Klavye açıkken de hep görünen büyük Ekle butonu
             .safeAreaInset(edge: .bottom) {
                 Button(action: addCurrent) {
-                    Label("Ekle · \(UTCFormat.shortDay(date))", systemImage: "plus.circle.fill")
+                    Label(L("Ekle", "Add") + " · \(UTCFormat.shortDay(date))", systemImage: "plus.circle.fill")
                         .font(.title3.bold())
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -81,11 +81,11 @@ struct AddFlightView: View {
                 .padding(.vertical, 8)
                 .background(.bar)
             }
-            .navigationTitle("Uçuş ekle")
+            .navigationTitle(L("Uçuş ekle", "Add flight"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Bitti") { dismiss() }
+                    Button(L("Bitti", "Done")) { dismiss() }
                 }
             }
         }
@@ -107,53 +107,63 @@ struct AddFlightView: View {
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppSettings.leaveMinutesKey) private var leaveMinutes = 60
+    @AppStorage(Lang.key, store: SharedStore.defaults) private var language = "system"
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
+                    Picker(L("Dil", "Language"), selection: $language) {
+                        Text(L("Sistem", "System")).tag("system")
+                        Text("Türkçe").tag("tr")
+                        Text("English").tag("en")
+                    }
+                } footer: {
+                    Text(L("Kilit ekranı ve widget bir sonraki yenilemede yeni dile geçer.", "The Lock Screen and widgets switch at the next refresh."))
+                }
+                Section {
                     Stepper(value: $leaveMinutes, in: 0...240, step: 5) {
-                        LabeledContent("Evden çıkış") {
-                            Text(leaveMinutes == 0 ? "Kapalı" : "İmzadan \(Display.minutes(leaveMinutes)) önce")
+                        LabeledContent(L("Evden çıkış", "Leave home")) {
+                            Text(leaveMinutes == 0 ? L("Kapalı", "Off") : L("İmzadan \(Display.minutes(leaveMinutes)) önce", "\(Display.minutes(leaveMinutes)) before sign-on"))
                                 .monospacedDigit()
                         }
                     }
                 } header: {
-                    Text("Çıkış bildirimi")
+                    Text(L("Çıkış bildirimi", "Leave alert"))
                 } footer: {
-                    Text("Bu saate kadar Ada'da yeşil ev sayacı, sonra sarı imza sayacı görünür. O anda chime sesiyle bildirim gelir. Değişiklik bir sonraki takip başlatmada geçerli olur.")
+                    Text(L("Bu saate kadar Ada'da yeşil ev sayacı, sonra sarı imza sayacı görünür. O anda uçak sesli bildirim gelir. Değişiklik bir sonraki takip başlatmada geçerli olur.", "Until then the Dynamic Island shows a green leave-home countdown, then the yellow sign-on countdown. An alert with the chime sound arrives at that moment. Changes apply the next time you start tracking."))
                 }
                 Section {
-                    NavigationLink("Nasıl kullanılır?") { HelpView() }
-                    NavigationLink("Tanılama") { DiagnosticsView() }
+                    NavigationLink(L("Nasıl kullanılır?", "How to use")) { HelpView() }
+                    NavigationLink(L("Tanılama", "Diagnostics")) { DiagnosticsView() }
                 }
                 if InboundService.isEnabled {
                     Section {
                         let stats = TaxiStats.summary
                         if stats.isEmpty {
-                            Text("Henüz ölçüm yok. Gelen uçağı parka girmiş uçuşlara baktıkça birikir.")
+                            Text(L("Henüz ölçüm yok. Gelen uçağı parka girmiş uçuşlara baktıkça birikir.", "No samples yet. They build up as inbound aircraft reach the stand."))
                                 .foregroundStyle(.secondary)
                         }
                         ForEach(stats, id: \.zone) { z in
-                            LabeledContent("\(z.zone) standları", value: "\(z.minutes) dk · \(z.count) ölçüm")
+                            LabeledContent(L("\(z.zone) standları", "\(z.zone) stands"), value: L("\(z.minutes) dk · \(z.count) ölçüm", "\(z.minutes) min · \(z.count) samples"))
                         }
                     } header: {
-                        Text("Öğrenilen taksi süreleri")
+                        Text(L("Öğrenilen taksi süreleri", "Learned taxi times"))
                     }
                 }
                 Section {
-                    Button("Bildirim sesini dene") {
+                    Button(L("Bildirim sesini dene", "Test alert sound")) {
                         Task { await NotificationManager.test() }
                     }
                 } footer: {
-                    Text("3 saniye sonra deneme bildirimi gelir. Telefon sessizdeyse ses çalmaz.")
+                    Text(L("3 saniye sonra deneme bildirimi gelir. Telefon sessizdeyse ses çalmaz.", "A test alert arrives in 3 seconds. No sound if the phone is on silent."))
                 }
             }
-            .navigationTitle("Ayarlar")
+            .navigationTitle(L("Ayarlar", "Settings"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Bitti") { dismiss() }
+                    Button(L("Bitti", "Done")) { dismiss() }
                 }
             }
         }
@@ -166,19 +176,19 @@ struct DiagnosticsView: View {
     var body: some View {
         List {
             Section {
-                if lines.isEmpty { Text("Kayıt yok.").foregroundStyle(.secondary) }
+                if lines.isEmpty { Text(L("Kayıt yok.", "No entries.")).foregroundStyle(.secondary) }
                 ForEach(lines, id: \.self) { Text($0).font(.caption.monospaced()) }
             } footer: {
-                Text("Takip kendiliğinden kapanma gibi bir sorun olursa bu ekranın görüntüsünü gönder.")
+                Text(L("Takip kendiliğinden kapanma gibi bir sorun olursa bu ekranın görüntüsünü gönder.", "If tracking stops by itself, send a screenshot of this screen."))
             }
             Section {
-                Button("Kayıtları temizle", role: .destructive) {
+                Button(L("Kayıtları temizle", "Clear log"), role: .destructive) {
                     DebugLog.clear()
                     lines = []
                 }
             }
         }
-        .navigationTitle("Tanılama")
+        .navigationTitle(L("Tanılama", "Diagnostics"))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { lines = DebugLog.lines }
     }

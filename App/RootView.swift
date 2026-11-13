@@ -6,22 +6,24 @@ struct ContentView: View {
     @ObservedObject private var session = FlightSession.shared
     @AppStorage("onboardingDone2") private var onboardingDone = false
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(Lang.key, store: SharedStore.defaults) private var language = "system"
 
     var body: some View {
         TabView(selection: $model.tab) {
             TodayView()
-                .tabItem { Label("Bugün", systemImage: "rectangle.topthird.inset.filled") }
+                .tabItem { Label(L("Bugün", "Today"), systemImage: "rectangle.topthird.inset.filled") }
                 .tag(AppTab.today)
             TourView()
-                .tabItem { Label("Tur", systemImage: "point.topleft.down.to.point.bottomright.curvepath") }
+                .tabItem { Label(L("Tur", "Trip"), systemImage: "point.topleft.down.to.point.bottomright.curvepath") }
                 .tag(AppTab.tour)
             WeatherTab()
-                .tabItem { Label("Hava", systemImage: "cloud.sun") }
+                .tabItem { Label(L("Hava", "Weather"), systemImage: "cloud.sun") }
                 .tag(AppTab.weather)
             FlightsView(store: model.store)
-                .tabItem { Label("Uçuşlarım", systemImage: "list.bullet") }
+                .tabItem { Label(L("Uçuşlarım", "My Flights"), systemImage: "list.bullet") }
                 .tag(AppTab.flights)
         }
+        .id(language)   // dil değişince tüm ekranlar yeniden çizilir
         .environmentObject(model)
         .tint(Palette.stand)
         .preferredColorScheme(.dark)
@@ -31,12 +33,12 @@ struct ContentView: View {
         .sheet(isPresented: $model.showSettings) {
             SettingsView()
         }
-        .alert("Tarih farklı", isPresented: Binding(get: { model.pending != nil }, set: { if !$0 { model.pending = nil } })) {
-            Button("Yine de ekle") {
+        .alert(L("Tarih farklı", "Different date"), isPresented: Binding(get: { model.pending != nil }, set: { if !$0 { model.pending = nil } })) {
+            Button(L("Yine de ekle", "Add anyway")) {
                 if let p = model.pending { Task { await model.begin(query: p.query, state: p.state) } }
                 model.pending = nil
             }
-            Button("Vazgeç", role: .cancel) { model.pending = nil }
+            Button(L("Vazgeç", "Cancel"), role: .cancel) { model.pending = nil }
         } message: {
             Text(model.pending?.message ?? "")
         }
@@ -75,7 +77,7 @@ struct CommonToolbar: ToolbarContent {
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             Button { model.showSettings = true } label: { Image(systemName: "gearshape") }
-                .accessibilityLabel("Ayarlar")
+                .accessibilityLabel(L("Ayarlar", "Settings"))
         }
         ToolbarItem(placement: .topBarTrailing) {
             if session.state != nil {
@@ -83,7 +85,7 @@ struct CommonToolbar: ToolbarContent {
                     if model.loading { ProgressView() } else { Image(systemName: "arrow.clockwise") }
                 }
                 .disabled(model.loading)
-                .accessibilityLabel("Yenile")
+                .accessibilityLabel(L("Yenile", "Refresh"))
             }
         }
     }
