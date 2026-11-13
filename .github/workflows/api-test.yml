@@ -11,10 +11,10 @@ jobs:
         continue-on-error: true
         run: |
           q='[out:json][timeout:25];way["aeroway"="taxiway"](36.64,-4.53,36.70,-4.46);out tags;'
-          curl -s -A "Ucus-test/1.0 (personal)" --data-urlencode "data=$q" https://overpass-api.de/api/interpreter -o osm.json -w "HTTP %{http_code}\n"
+          curl -s -A "Ucus-test/1.0 (personal)" --data-urlencode "data=$q" https://overpass.kumi.systems/api/interpreter -o osm.json -w "HTTP %{http_code}\n"
           jq -r '"taksi yolu parçası: \(.elements|length)"' osm.json || head -c 300 osm.json
           jq -r '[.elements[].tags.ref // empty] | unique | join(", ")' osm.json || true
           q2='[out:json][timeout:25];(node["aeroway"="parking_position"](36.64,-4.53,36.70,-4.46);node["aeroway"="gate"](36.64,-4.53,36.70,-4.46);way["aeroway"="parking_position"](36.64,-4.53,36.70,-4.46););out tags;'
-          curl -s -A "Ucus-test/1.0 (personal)" --data-urlencode "data=$q2" https://overpass-api.de/api/interpreter -o osm2.json -w "HTTP %{http_code}\n"
+          curl -s -A "Ucus-test/1.0 (personal)" --data-urlencode "data=$q2" https://overpass.kumi.systems/api/interpreter -o osm2.json -w "HTTP %{http_code}\n"
           jq -r '"stand/gate: \(.elements|length)"' osm2.json || true
           jq -r '[.elements[] | "\(.tags.aeroway):\(.tags.ref // "?")"] | .[0:50] | join(", ")' osm2.json || true
