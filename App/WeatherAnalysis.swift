@@ -271,3 +271,44 @@ enum TafParser {
         return fixed
     }
 }
+
+// MARK: - TAF: bir anda geçerli olan gruplar
+
+extension TafParser {
+    /// Grubun belirlediği unsurlar: rüzgâr, görüş, hadise, bulut.
+    static func categories(_ text: String) -> Set<String> {
+        var c = Set<String>()
+        let wx = #"^(\+|-|VC)?(MI|BC|PR|DR|BL|SH|TS|FZ)?(DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PO|SQ|FC|SS|DS)+$"#
+        for t in text.split(separator: " ").map(String.init) {
+            if t.range(of: #"^(\d{3}|VRB)\d{2,3}(G\d{2,3})?(KT|MPS)$"#, options: .regularExpression) != nil { c.insert("wind") }
+            else if t == "CAVOK" { c.formUnion(["vis", "wx", "cloud"]) }
+            else if t.range(of: #"^\d{4}$"#, options: .regularExpression) != nil { c.insert("vis") }
+            else if t.range(of: #"^(FEW|SCT|BKN|OVC|VV)\d{3}"#, options: .regularExpression) != nil
+                        || ["NSC", "SKC", "NCD", "CLR"].contains(t) { c.insert("cloud") }
+            else if t == "NSW" || t == "TS" || t.range(of: wx, options: .regularExpression) != nil { c.insert("wx") }
+        }
+        return c
+    }
+
+    /// Verilen anda temel koşulları belirleyen gruplar (ana/FM + o ana kadar başlamış BECMG'ler).
+    static func persistent(_ groups: [TafGroup], at time: Date) -> Set<Int> {
+        guard let base = groups.last(where: { $0.kind == "ANA" || ($0.kind == "FM" && ($0.start ?? .distantFuture) <= time) })
+        else { return [] }
+        var owner: [String: Int] = [:]
+        for cat in categories(base.text) { owner[cat] = base.id }
+        for g in groups where g.id > base.id && g.kind == "BECMG" && (g.start ?? .distantFuture) <= time {
+            for cat in categories(g.text) { owner[cat] = g.id }
+        }
+        return Set(owner.values)
+    }
+
+    /// Olay saatinin ±1 saatinde geçerli gruplar: kalıcı olanlar (iki uçta) + çakışan TEMPO/PROB.
+    static func applicable(_ groups: [TafGroup], event: Date) -> Set<Int> {
+        let from = event.addingTimeInterval(-3600), to = event.addingTimeInterval(3600)
+        var ids = persistent(groups, at: from).union(persistent(groups, at: to))
+        for g in groups where g.kind.hasPrefix("TEMPO") || g.kind.hasPrefix("PROB") {
+            if g.overlaps(from, to) { ids.insert(g.id) }
+        }
+        return ids
+    }
+}

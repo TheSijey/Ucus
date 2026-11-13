@@ -200,9 +200,10 @@ struct WeatherSection: View {
 
     private func tafView(_ taf: String, events evs: [WeatherEvent]) -> some View {
         let groups = TafParser.groups(taf)
+        let applicable = evs.map { TafParser.applicable(groups, event: $0.time) }
         return VStack(alignment: .leading, spacing: 3) {
             ForEach(groups) { g in
-                let hits = evs.filter { g.overlaps($0.time.addingTimeInterval(-3600), $0.time.addingTimeInterval(3600)) }
+                let hits = evs.indices.filter { applicable[$0].contains(g.id) }.map { evs[$0] }
                 let tint: Color? = hits.contains(where: { !$0.isReturn }) && hits.contains(where: { $0.isReturn })
                     ? .teal : hits.first.map { $0.isReturn ? .blue : .green }
                 HStack(alignment: .top, spacing: 6) {
