@@ -308,8 +308,27 @@ enum AeroDataBox {
         )
         info.destGateToday = back?.departure?.gate
         info.destGateHistory = history
+        info.destRunwayHistory = await runwayHistory(flight: ours, to: dest.icao ?? "", before: ref)
         info.arrivalGateToday = out.arrival?.gate
         return info
+    }
+
+    private static var runwayCache: [String: (date: Date, runways: [String])] = [:]
+
+    /// Gidiş seferinin son 3 günde varış meydanındaki iniş pistleri (en yeni önce).
+    private static func runwayHistory(flight: String, to icao: String, before ref: Date) async -> [String] {
+        let days = istanbulDays(ref.addingTimeInterval(-3 * 86_400), plus: 2)
+        let key = flight + "|" + (days.last ?? "")
+        if let c = runwayCache[key], Date().timeIntervalSince(c.date) < 86_400 { return c.runways }
+        var list: [String] = []
+        for d in days.reversed() {
+            let flights = await request(path: "flights/number/\(flight)/\(d)") ?? []
+            if let r = flights.first(where: { $0.arrival?.airport?.icao == icao })?.arrival?.runway, !r.isEmpty {
+                list.append(r)
+            }
+        }
+        runwayCache[key] = (Date(), list)
+        return list
     }
 
     private static var gateCache: [String: (date: Date, gates: [String])] = [:]

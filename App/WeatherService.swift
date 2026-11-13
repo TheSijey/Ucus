@@ -9,7 +9,7 @@ struct AirportWeather: Identifiable, Hashable {
     var metarTime: Date?
     var taf: String?
     var category: String?   // VFR, MVFR, IFR, LIFR
-    var runways: [String] = []   // "16L/34R" ...
+    var runways: [RunwayData] = []   // pistler (gerçek yön ve uzunlukla)
 }
 
 /// aviationweather.gov (NOAA) – ücretsiz, anahtar gerektirmez.
@@ -47,25 +47,42 @@ enum WeatherService {
         return result
     }
 
-    /// Pist listeleri (kalıcı önbellek; pistler değişmez).
-    private static let runwayCacheKey = "runwayCache"
-    static let knownRunways: [String: [String]] = [
+    /// Pist bilgileri (kalıcı önbellek; pistler değişmez).
+    private static let runwayCacheKey = "runwayCache2"
+    static let fallbackRunways: [String: [String]] = [
         "LTFM": ["16L/34R", "16R/34L", "17L/35R", "17R/35L", "18/36"],
     ]
 
-    private static func runwayInfo(_ ids: [String]) async -> [String: [String]] {
-        var cache = (UserDefaults.standard.dictionary(forKey: runwayCacheKey) as? [String: [String]]) ?? [:]
-        let missing = ids.filter { (cache[$0] ?? []).isEmpty && knownRunways[$0] == nil }
+    private static func runwayInfo(_ ids: [String]) async -> [String: [RunwayData]] {
+        var cache = (UserDefaults.standard.dictionary(forKey: runwayCacheKey) as? [String: [[String: Any]]]) ?? [:]
+        let missing = ids.filter { (cache[$0] ?? []).isEmpty }
         if !missing.isEmpty {
             for row in await load("airport", ids: missing.joined(separator: ",")) {
                 guard let icao = row["icaoId"] as? String else { continue }
-                let list = (row["runways"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }
+                let list: [[String: Any]] = (row["runways"] as? [[String: Any]] ?? []).compactMap { r in
+                    guard let id = r["id"] as? String else { return nil }
+                    var d: [String: Any] = ["id": id]
+                    if let a = r["alignment"] as? Int { d["a"] = a }
+                    else if let a = r["alignment"] as? String, let n = Int(a) { d["a"] = n }
+                    if let dim = r["dimension"] as? String, let ft = Int(dim.split(separator: "x").first ?? "") {
+                        d["l"] = Int(Double(ft) * 0.3048)
+                    }
+                    return d
+                }
                 if !list.isEmpty { cache[icao] = list }
             }
             UserDefaults.standard.set(cache, forKey: runwayCacheKey)
         }
-        var result = knownRunways
-        for id in ids where result[id] == nil { result[id] = cache[id] ?? [] }
+        var result: [String: [RunwayData]] = [:]
+        for id in ids {
+            if let rows = cache[id], !rows.isEmpty {
+                result[id] = rows.compactMap { r in
+                    (r["id"] as? String).map { RunwayData(id: $0, alignment: r["a"] as? Int, lengthM: r["l"] as? Int) }
+                }
+            } else {
+                result[id] = (fallbackRunways[id] ?? []).map { RunwayData(id: $0, alignment: nil, lengthM: nil) }
+            }
+        }
         return result
     }
 

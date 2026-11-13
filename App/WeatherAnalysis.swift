@@ -18,10 +18,19 @@ struct Wind: Hashable {
     }
 }
 
+/// Meydan verisindeki bir pist: "01L/19R", gerçek yön (ilk uç için), uzunluk.
+struct RunwayData: Hashable {
+    let id: String
+    let alignment: Int?
+    let lengthM: Int?
+}
+
 /// Bir pist ucu için rüzgâr bileşenleri.
 struct RunwayWind: Hashable, Identifiable {
     var id: String { runway }
     let runway: String      // "35R"
+    var heading: Int = 0    // pist yönü (derece)
+    var lengthM: Int? = nil
     let head: Int           // + karşı, - arka
     let cross: Int          // mutlak
     let crossFromLeft: Bool
@@ -42,10 +51,27 @@ enum WindCalc {
         return Double(n == 0 ? 36 : n) * 10
     }
 
-    static func components(wind: Wind, runways: [String]) -> [RunwayWind] {
+    /// Pist uçları ve yönleri: gerçek yön varsa o (ilk uç; karşı uç +180), yoksa numaradan.
+    static func ends(_ data: [RunwayData]) -> [(name: String, heading: Double, length: Int?)] {
+        data.flatMap { r -> [(name: String, heading: Double, length: Int?)] in
+            let parts = r.id.split(separator: "/").map { String($0).trimmingCharacters(in: .whitespaces) }
+                .filter { $0.range(of: #"^\d{1,2}[LRC]?$"#, options: .regularExpression) != nil }
+            return parts.enumerated().compactMap { i, name in
+                let h: Double?
+                if let a = r.alignment {
+                    h = Double((a + (i == 0 ? 0 : 180)) % 360)
+                } else {
+                    h = heading(name)
+                }
+                return h.map { (name, $0 == 0 ? 360 : $0, r.lengthM) }
+            }
+        }
+    }
+
+    static func components(wind: Wind, runways data: [RunwayData]) -> [RunwayWind] {
         guard let dir = wind.direction else { return [] }
-        return ends(runways).compactMap { end in
-            guard let hdg = heading(end) else { return nil }
+        return ends(data).compactMap { end in
+            let hdg = end.heading
             let diff = (Double(dir) - hdg) * .pi / 180
             func comp(_ s: Int) -> (Int, Int, Bool) {
                 let h = Double(s) * cos(diff)
@@ -54,7 +80,8 @@ enum WindCalc {
             }
             let base = comp(wind.speed)
             let gust = wind.gust.map(comp)
-            return RunwayWind(runway: end, head: base.0, cross: base.1, crossFromLeft: base.2,
+            return RunwayWind(runway: end.name, heading: Int(hdg.rounded()), lengthM: end.length,
+                              head: base.0, cross: base.1, crossFromLeft: base.2,
                               gustHead: gust?.0, gustCross: gust?.1)
         }
         .sorted { $0.head > $1.head }
