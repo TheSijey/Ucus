@@ -18,7 +18,7 @@ struct OnboardingView: View {
         ("timer", .green, "Sayaçlar",
          ["Yeşil ⌂ sayaç: evden çıkışa kalan süre.",
           "Sarı sayaç: imzaya kalan süre (EOBT − 1:15).",
-          "İmzadan 30 dk sonra her şey kendiliğinden kaybolur."]),
+          "İmza + 30 dk'da Ada'dan kalkar; kilit ekranı ve uygulama dönüş inişine kadar kalır."]),
         ("bell.badge", .orange, "İzinler",
          ["Bildirime izin ver: çıkış saatinde chime çalar.",
           "Canlı Etkinlikler açık olmalı (Ayarlar > Uçuş).",
@@ -91,7 +91,7 @@ struct HelpView: View {
                 bullet("Silmek için listedeki uçuşu sola kaydır. Geçmiş günler kendiliğinden silinir.")
             }
             Section("Ada'ya ekleme") {
-                bullet("Listede uçuşa ya da Hızlı arama'ya sefer/tescil yaz (1751, LTD, TC-LTD).")
+                bullet("Uçuşlarım sekmesinde uçuşa dokun ya da Hızlı arama'ya sefer/tescil yaz (1751, LTD, TC-LTD).")
                 bullet("CDM o günün uçuşunu genelde aynı gün gösterir; başka bir günü gösterirse uygulama sorar.")
                 bullet("Stand ya da saat değişirse kilit ekranındaki ↻'a dokun: uygulama açılır ve yenilenir. Uygulamada sağ üstteki ↻ ya da Yenile de aynı işi yapar.")
                 bullet("EOBT öne çekilirse imza ve çıkış saatleri değişmez; ertelenirse yeni saate geçer. Uçuşu Ada'dan kaldırıp yeniden eklesen de bu kural geçerli.")
@@ -100,7 +100,7 @@ struct HelpView: View {
                 bullet("İmza = EOBT − 1:15. Evden çıkış = imza − Ayarlar'daki süre.")
                 bullet("Çıkışa kadar yeşil ⌂ sayaç, sonra sarı imza sayacı. Çıkış saatinde chime'lı bildirim gelir.")
                 bullet("Bildirime dokununca Ada hemen imza sayacına geçer; dokunmazsan iOS birkaç dakika içinde geçirir.")
-                bullet("İmzadan 30 dk sonra Ada, kilit ekranı ve saatten kaldırılır.")
+                bullet("İmza + 30 dk'da Ada'dan kalkar. Kilit ekranında dönüş inişine kadar (iOS en fazla 4 saat) kalır; uygulamada gate, hava ve tur bilgisi dönüş inişine kadar durur.")
             }
             if InboundService.isEnabled {
                 Section("Gelen uçak") {

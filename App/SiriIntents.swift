@@ -34,7 +34,7 @@ struct StartNextFlightIntent: AppIntent {
 
         do {
             try await LiveActivityManager.start(query: CDMFetcher.normalize(planned.flight), state: state)
-            FlightStore.markStarted(planned, hideAt: state.hideAt)
+            FlightStore.markStarted(planned, until: FlightSession.shared.state?.tourEnd ?? state.tourEnd)
         } catch {
             return .result(dialog: "Ada'ya eklenemedi. Ayarlar'da Canlı Etkinlikler açık mı?")
         }

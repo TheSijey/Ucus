@@ -1,4 +1,3 @@
-import ActivityKit
 import Foundation
 import WidgetKit
 
@@ -6,15 +5,11 @@ import WidgetKit
 @MainActor
 enum WidgetSync {
     static func push() {
-        if let s = Activity<FlightAttributes>.activities.first(where: { $0.activityState == .active })?.content.state,
-           s.hideAt > Date() {
+        if let s = FlightSession.shared.state, s.tourEnd > Date() {
             SharedStore.active = .init(flight: s.flight, registration: s.registration, stand: s.stand,
                                        gate: s.gate, destination: s.destination, signOn: s.signOn,
-                                       leaveAt: s.upcomingLeave(), hideAt: s.hideAt,
+                                       leaveAt: s.upcomingLeave(), hideAt: s.tourEnd,
                                        timeline: s.dayTimeline)
-        } else if let old = SharedStore.active, let end = old.timeline?.end, end > Date() {
-            // Ada kapandı ama günün akışı sürüyor: widget'ta çizelge kalsın.
-            SharedStore.active = old
         } else {
             SharedStore.active = nil
         }

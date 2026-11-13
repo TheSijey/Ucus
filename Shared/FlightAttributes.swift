@@ -60,6 +60,14 @@ extension FlightAttributes.ContentState {
     /// İmza saatinden 30 dk sonra kaybolur.
     var hideAt: Date { signOn.addingTimeInterval(30 * 60) }
 
+    /// Turun bittiği an: dönüş inişi; yoksa gidiş varışı + 2 sa; o da yoksa imza + 6 sa.
+    var tourEnd: Date {
+        let end = turn?.returnArrival
+            ?? turn?.outboundArrival.map { $0.addingTimeInterval(2 * 3600) }
+            ?? signOn.addingTimeInterval(6 * 3600)
+        return max(end, hideAt)
+    }
+
     /// "TC-LTD" -> "LTD"
     var shortRegistration: String {
         registration.components(separatedBy: "-").last ?? registration

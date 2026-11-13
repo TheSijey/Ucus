@@ -2,23 +2,75 @@ import ActivityKit
 import BackgroundTasks
 import Foundation
 
+/// Uygulamanın "şu anki uçuşu". Canlı Etkinlikten bağımsız saklanır; tur bitene kadar uygulamada kalır.
+@MainActor
+final class FlightSession: ObservableObject {
+    static let shared = FlightSession()
+
+    private struct Stored: Codable {
+        var query: String
+        var state: FlightAttributes.ContentState
+    }
+    private let key = "currentFlight"
+
+    @Published private(set) var query: String = ""
+    @Published private(set) var state: FlightAttributes.ContentState?
+
+    private init() {
+        if let data = UserDefaults.standard.data(forKey: key),
+           let s = try? JSONDecoder().decode(Stored.self, from: data) {
+            query = s.query
+            state = s.state
+        }
+        expireIfNeeded()
+    }
+
+    func set(query: String, state: FlightAttributes.ContentState) {
+        self.query = query
+        self.state = state
+        if let data = try? JSONEncoder().encode(Stored(query: query, state: state)) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
+
+    func clear() {
+        query = ""
+        state = nil
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    /// Tur bittiyse temizle.
+    func expireIfNeeded() {
+        if let s = state, Date() >= s.tourEnd {
+            DebugLog.add("Tur bitti \(s.flight), uçuş kaldırıldı")
+            clear()
+        }
+    }
+}
+
 @MainActor
 enum LiveActivityManager {
     static let wakeTaskID = "com.cengiz.ucus.cleanup"
 
-    static var current: Activity<FlightAttributes>? { Activity<FlightAttributes>.activities.first }
+    /// Hâlâ Ada'da olan (bitmemiş) etkinlik.
+    static var current: Activity<FlightAttributes>? {
+        Activity<FlightAttributes>.activities.first { $0.activityState == .active || $0.activityState == .stale }
+    }
 
     static func start(query: String, state input: FlightAttributes.ContentState) async throws {
-        await endAll(reason: "yeni uçuş eklendi")
+        await endAll(reason: "yeni uçuş eklendi", clearSession: false)
         var state = input
         // Aynı uçuş daha önce eklendiyse ve EOBT öne çekildiyse eski (daha geç) imza kalır.
         state.signOn = SignOnMemory.resolve(flight: state.flight, newSignOn: state.signOn)
         let minutes = AppSettings.leaveMinutes
         state.leaveAt = SignOnMemory.leave(for: state.signOn, minutes: minutes)
 
-        let content = ActivityContent(state: state, staleDate: state.hideAt)
-        let activity = try Activity.request(attributes: FlightAttributes(query: query), content: content, pushType: nil)
-        ActivityObserver.watch(activity)
+        FlightSession.shared.set(query: query, state: state)
+        if Date() < state.hideAt {
+            let content = ActivityContent(state: state, staleDate: state.hideAt)
+            let activity = try Activity.request(attributes: FlightAttributes(query: query), content: content, pushType: nil)
+            ActivityObserver.watch(activity)
+        }
         DebugLog.add("Başlatıldı \(state.flight) · imza \(state.signOn.formatted(.dateTime.hour().minute())) · stand \(state.stand)")
 
         if let leave = state.leaveAt {
@@ -30,44 +82,58 @@ enum LiveActivityManager {
         WidgetSync.push()
     }
 
-    static func update(_ activity: Activity<FlightAttributes>, with state: FlightAttributes.ContentState) async {
-        await activity.update(ActivityContent(state: state, staleDate: state.hideAt))
+    /// Durumu kaydeder; etkinlik hâlâ Ada'daysa onu da günceller.
+    static func apply(_ state: FlightAttributes.ContentState) async {
+        FlightSession.shared.set(query: FlightSession.shared.query, state: state)
+        if let a = current {
+            await a.update(ActivityContent(state: state, staleDate: state.hideAt))
+        }
         WidgetSync.push()
     }
 
-    static func endAll(reason: String = "kullanıcı kaldırdı") async {
+    /// Kullanıcı kaldırdı (ya da yeni uçuş): etkinlik hemen kapanır.
+    static func endAll(reason: String = "kullanıcı kaldırdı", clearSession: Bool = true) async {
         NotificationManager.cancelLeave()
         for a in Activity<FlightAttributes>.activities {
             DebugLog.add("Kapatılıyor \(a.content.state.flight): \(reason)")
             await a.end(nil, dismissalPolicy: .immediate)
         }
+        if clearSession { FlightSession.shared.clear() }
         WidgetSync.push()
     }
 
-    /// İmza + 30 dk geçmişse kapat.
+    /// İmza + 30: Ada'dan kalkar, kilit ekranında tur sonuna kadar (iOS en fazla 4 sa) kalır.
+    /// Tur bitince her şey kapanır.
     static func endExpired() async {
-        for a in Activity<FlightAttributes>.activities where Date() >= a.content.state.hideAt {
-            DebugLog.add("Süresi doldu \(a.content.state.flight) (imza+30: \(a.content.state.hideAt.formatted(.dateTime.hour().minute())))")
-            await a.end(nil, dismissalPolicy: .immediate)
+        let now = Date()
+        for a in Activity<FlightAttributes>.activities {
+            let s = a.content.state
+            if now >= s.tourEnd {
+                await a.end(nil, dismissalPolicy: .immediate)
+            } else if now >= s.hideAt, a.activityState == .active || a.activityState == .stale {
+                DebugLog.add("İmza+30 \(s.flight): Ada'dan kaldırıldı, kilit ekranında kalıyor")
+                await a.end(ActivityContent(state: s, staleDate: nil),
+                            dismissalPolicy: .after(min(s.tourEnd, now.addingTimeInterval(4 * 3600))))
+            }
         }
+        FlightSession.shared.expireIfNeeded()
     }
 
     /// Görünümü yeniden çizdirir (çıkış saati geçtiyse Ada imza sayacına geçer).
     static func refreshPhase() async {
         await endExpired()
-        for a in Activity<FlightAttributes>.activities {
-            var s = a.content.state
+        if var s = FlightSession.shared.state {
             if let leave = s.leaveAt, Date() >= leave { s.leaveAt = nil }
-            await update(a, with: s)
+            await apply(s)
         }
         scheduleNextWake()
+        WidgetSync.push()
     }
 
-    /// iOS'tan bir sonraki önemli anda (çıkış ya da kaybolma) uygulamayı kısa süre uyandırmasını ister.
-    /// iOS bunu birkaç dakika kaydırabilir.
+    /// iOS'tan bir sonraki önemli anda (çıkış, imza+30, tur sonu) uygulamayı kısa süre uyandırmasını ister.
     static func scheduleNextWake() {
-        guard let s = current?.content.state else { return }
-        let next = [s.leaveAt, s.hideAt].compactMap { $0 }.filter { $0 > Date() }.min()
+        guard let s = FlightSession.shared.state else { return }
+        let next = [s.leaveAt, s.hideAt, s.tourEnd].compactMap { $0 }.filter { $0 > Date() }.min()
         guard let next else { return }
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: wakeTaskID)
         let request = BGAppRefreshTaskRequest(identifier: wakeTaskID)
@@ -78,25 +144,28 @@ enum LiveActivityManager {
 
 @MainActor
 enum FlightRefresher {
-    /// Açık Canlı Etkinliği CDM'den tekrar çekip günceller.
-    /// İmza saati: EOBT öne çekildiyse eski (geç) imza kalır, ertelendiyse yeni imzaya geçer.
+    /// Şu anki uçuşu CDM ve diğer kaynaklardan tekrar çeker.
+    /// İmza: EOBT öne çekildiyse eski (geç) imza kalır, ertelendiyse yeni imzaya geçer.
     /// - Returns: hata mesajı; başarılıysa nil.
     @discardableResult
     static func refreshActive() async -> String? {
         await LiveActivityManager.endExpired()
-        guard let activity = LiveActivityManager.current else {
-            DebugLog.add("Yenile: Ada'da etkin uçuş yok")
-            return "Ada'da uçuş yok."
+        let session = FlightSession.shared
+        guard let old = session.state, !session.query.isEmpty else {
+            DebugLog.add("Yenile: etkin uçuş yok")
+            return "Etkin uçuş yok."
         }
-        DebugLog.add("Yenile başladı \(activity.content.state.flight) · durum \(String(describing: activity.activityState))")
+        DebugLog.add("Yenile başladı \(old.flight)")
         do {
-            var state = try await FlightLoader.load(query: activity.attributes.query)
-            let old = activity.content.state
+            var state = try await FlightLoader.load(query: session.query)
             state.signOn = max(old.signOn, state.signOn)
             SignOnMemory.remember(flight: state.flight, signOn: state.signOn)
+            // CDM uçuş kalktıktan sonra bilgi vermeyebilir: boş gelenleri eskiden koru
+            if state.turn == nil { state.turn = old.turn }
+            if state.inbound == nil { state.inbound = old.inbound }
 
             let minutes = AppSettings.leaveMinutes
-            state.leaveAt = SignOnMemory.leave(for: state.signOn, minutes: minutes)   // geçmişse nil
+            state.leaveAt = SignOnMemory.leave(for: state.signOn, minutes: minutes)
             if state.leaveAt != old.leaveAt {
                 if let leave = state.leaveAt {
                     await NotificationManager.scheduleLeave(flight: state.flight, at: leave, minutesBeforeSignOn: minutes)
@@ -104,17 +173,7 @@ enum FlightRefresher {
                     NotificationManager.cancelLeave()
                 }
             }
-            await LiveActivityManager.update(activity, with: state)
-
-            // Güvence: etkinlik bir sebeple kapandıysa aynı bilgilerle yeniden aç.
-            try? await Task.sleep(for: .milliseconds(300))
-            if activity.activityState != .active || LiveActivityManager.current == nil {
-                DebugLog.add("Yenile sonrası etkinlik kapalı (\(String(describing: activity.activityState))) → yeniden açılıyor")
-                let content = ActivityContent(state: state, staleDate: state.hideAt)
-                if let a = try? Activity.request(attributes: activity.attributes, content: content, pushType: nil) {
-                    ActivityObserver.watch(a)
-                }
-            }
+            await LiveActivityManager.apply(state)
             DebugLog.add("Yenile tamam · stand \(state.stand) · imza \(state.signOn.formatted(.dateTime.hour().minute()))")
             LiveActivityManager.scheduleNextWake()
             return nil

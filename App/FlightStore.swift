@@ -59,13 +59,13 @@ final class FlightStore: ObservableObject {
 
     private static let startedKey = "startedPlannedFlight"   // [id, hideAt]
 
-    /// Ada'ya eklenen planlı uçuşu hatırla; süresi (imza + 30 dk) dolunca listeden düşer.
-    static func markStarted(_ flight: PlannedFlight, hideAt: Date) {
-        UserDefaults.standard.set([flight.id.uuidString, hideAt.timeIntervalSince1970], forKey: startedKey)
+    /// Ada'ya eklenen planlı uçuşu hatırla; tur bitince listeden düşer.
+    static func markStarted(_ flight: PlannedFlight, until end: Date) {
+        UserDefaults.standard.set([flight.id.uuidString, end.timeIntervalSince1970], forKey: startedKey)
     }
 
     /// - Uçuş günü (UTC) bittikten sonra ertesi sabah 09:00'a (TR, 06:00 UTC) kadar kalır, sonra silinir.
-    /// - Ada'ya eklenip süresi dolan uçuş hemen silinir.
+    /// - Ada'ya eklenen uçuş tur bitince silinir.
     func prune() {
         let now = Date()
         flights.removeAll { $0.date.addingTimeInterval(30 * 3600) <= now }   // gün sonu + 6 saat
