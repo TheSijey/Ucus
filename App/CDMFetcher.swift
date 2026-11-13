@@ -5,6 +5,7 @@ import WebKit
 enum CDMError: LocalizedError {
     case empty
     case notFound(String)
+    case otherFlight(asked: String, got: String)
 
     var errorDescription: String? {
         switch self {
@@ -17,6 +18,8 @@ enum CDMError: LocalizedError {
                 .joined(separator: " ")
                 .prefix(300)
             return "CDM'den okunamadı.\n\nSayfada görünen: \(snippet.isEmpty ? "(boş)" : String(snippet))"
+        case .otherFlight(let asked, let got):
+            return "CDM'de \(asked) bulunamadı; arama \(got) uçuşunu getirdi. Uçuş CDM'de henüz görünmüyor olabilir, biraz sonra tekrar dene."
         }
     }
 }
@@ -31,12 +34,37 @@ final class CDMFetcher {
     static let base = "https://mobilecdm.igairport.aero/"
     static let safariUA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
 
-    /// "TK1751" -> "1751", "TC-LTD" -> "LTD", " ltd " -> "LTD"
+    /// "1751" / "TK1751" -> "TK1751", "TC-LTD" / "ltd" -> "LTD".
+    /// CDM sadece rakamla aranınca içinde o rakamlar geçen ilk uçuşu getirir (828 -> 3U3828), bu yüzden TK ön eki kalır.
     static func normalize(_ raw: String) -> String {
         var q = raw.uppercased().replacingOccurrences(of: " ", with: "")
-        if q.range(of: #"^TK\d"#, options: .regularExpression) != nil { q.removeFirst(2) }
+        if q.range(of: #"^\d{1,4}[A-Z]?$"#, options: .regularExpression) != nil { q = "TK" + q }
+        if q.range(of: #"^TK0*\d"#, options: .regularExpression) != nil { q = CDMParser.cleanFlight(q) }
         if q.range(of: #"^TC-?[A-Z]{3}$"#, options: .regularExpression) != nil { q = String(q.suffix(3)) }
         return q
+    }
+
+    /// Aranan bir uçuş numarasıysa, gelen sonucun gerçekten o uçuş olduğunu doğrular.
+    static func verify(_ state: FlightAttributes.ContentState, query q: String) throws {
+        guard q.range(of: #"^[A-Z0-9]{2}\d"#, options: .regularExpression) != nil,
+              q.range(of: #"^[A-Z]{3}$"#, options: .regularExpression) == nil else { return }
+        if CDMParser.cleanFlight(state.flight) != CDMParser.cleanFlight(q) {
+            throw CDMError.otherFlight(asked: q, got: state.flight)
+        }
+    }
+
+    /// CDM sitesinin kendi veri servisi: hızlı, tarayıcı gerektirmez.
+    static func fetchAPI(_ q: String) async throws -> FlightAttributes.ContentState? {
+        guard let enc = q.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let url = URL(string: base + "Service/api/Flight/" + enc) else { return nil }
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+        req.setValue("true", forHTTPHeaderField: "Auto-Refresh")
+        req.setValue("iOS", forHTTPHeaderField: "Device-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue(safariUA, forHTTPHeaderField: "User-Agent")
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return CDMParser.parseJSON(data)
     }
 
     /// Arama kutusunu doldurup oka basar (sitenin kendi arayüzünü kullanır).
@@ -62,7 +90,25 @@ final class CDMFetcher {
 
     func fetch(query raw: String) async throws -> FlightAttributes.ContentState {
         let q = Self.normalize(raw)
-        guard !q.isEmpty, let url = URL(string: Self.base + "#/flight/\(q)") else { throw CDMError.empty }
+        guard !q.isEmpty else { throw CDMError.empty }
+        do {
+            if let s = try await Self.fetchAPI(q) {
+                try Self.verify(s, query: q)
+                DebugLog.add("CDM servis: \(s.flight) stand \(s.stand)")
+                return s
+            }
+        } catch let e as CDMError {
+            throw e
+        } catch {
+            DebugLog.add("CDM servis hatası, tarayıcıyla deneniyor: \(error.localizedDescription)")
+        }
+        let s = try await fetchWeb(q)
+        try Self.verify(s, query: q)
+        return s
+    }
+
+    private func fetchWeb(_ q: String) async throws -> FlightAttributes.ContentState {
+        guard let url = URL(string: Self.base + "#/flight/\(q)") else { throw CDMError.empty }
 
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()

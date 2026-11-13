@@ -9,7 +9,8 @@ struct OnboardingView: View {
     private let pages: [(icon: String, color: Color, title: String, lines: [String])] = [
         ("airplane", .cyan, "Hoş geldin",
          ["Uçuş, İGA CDM'deki stand, tescil, pist ve saatleri tek yerde toplar.",
-          "Kilit ekranında, Dynamic Island'da ve saatinde görürsün."]),
+          "Kilit ekranında, Dynamic Island'da ve saatinde görürsün.",
+          "Şimdilik sadece İstanbul Havalimanı (IST) kalkışlı uçuşlarda çalışır."]),
         ("list.bullet.rectangle", .blue, "Uçuşlarını ekle",
          ["Uçuşlarım sekmesinde + ile tarih ve sefer numarası gir.",
           "Tarih UTC'dir: roster'da hangi gün yazıyorsa onu seç.",
@@ -92,6 +93,10 @@ struct HelpView: View {
 
     var body: some View {
         List {
+            Section("Hangi uçuşlar?") {
+                bullet("Uygulama İstanbul Havalimanı'nın (IST) CDM sistemini kullanır; bu yüzden şimdilik sadece IST kalkışlı uçuşlarda çalışır. Dış meydandan kalkan seferler (ör. dönüş seferi) CDM'de görünmez.")
+                bullet("Varış meydanının havası, pist rüzgârı ve dönüş seferi saatleri yine gösterilir.")
+            }
             Section("Uçuş ekleme") {
                 bullet("Uçuşlarım sekmesinde + → tarih (UTC, roster'daki gibi) ve sefer numarası (1751 ya da TK1751).")
                 bullet("Alttaki mavi Ekle butonu klavye açıkken de görünür; takvim her eklemede bir gün ilerler.")
@@ -130,6 +135,7 @@ struct HelpView: View {
                 }
             }
             Section("Sorun olursa") {
+                bullet("Uçuş bulunamadı ya da başka bir uçuş geldi: uçuş CDM'de genelde kalkıştan birkaç saat önce görünür; biraz sonra tekrar dene.")
                 bullet("Kilit ekranında ya da Ada'da görünmüyor: Ayarlar > Uçuş > Canlı Etkinlikler açık mı?")
                 bullet("Bildirim/ses yok: Ayarlar > Uçuş > Bildirimler açık mı? Telefon sessizde mi?")
                 bullet("Saatte görünmüyor: iPhone'da Watch uygulaması > Akıllı Yığın > Canlı Etkinlikler.")

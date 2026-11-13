@@ -58,7 +58,7 @@ struct AddFlightView: View {
                         .submitLabel(.done)
                         .onSubmit(addCurrent)
                 } footer: {
-                    Text("Ekledikçe takvim bir sonraki güne geçer; birden fazla uçuşu arka arkaya girebilirsin.")
+                    Text("Sadece İstanbul Havalimanı (IST) kalkışlı uçuşlar: bilgiler İGA CDM'den gelir. Ekledikçe takvim bir sonraki güne geçer.")
                 }
                 if !added.isEmpty {
                     Section("Eklenenler") {

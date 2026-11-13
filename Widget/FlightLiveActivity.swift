@@ -43,7 +43,7 @@ struct FlightLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack {
-                        Text("Gate \(Display.text(s.gate))")
+                        Text("SID \(Display.text(s.sid ?? ""))")
                         Spacer()
                         PhaseCountdown(state: s)
                             .frame(maxWidth: 130, alignment: .trailing)
@@ -102,7 +102,7 @@ struct LockScreenView: View {
                 Spacer()
                 Text(Display.text(state.stand)).bold().foregroundStyle(.cyan)
             }
-            Text("\(Display.text(state.registration)) · Gate \(Display.text(state.gate))")
+            Text("\(Display.text(state.registration)) · SID \(Display.text(state.sid ?? ""))")
                 .font(.caption)
             PhaseCountdown(state: state)
                 .font(.caption.bold())
@@ -129,7 +129,7 @@ struct LockScreenView: View {
                 Text(Display.text(state.registration)).font(.subheadline.bold())
                 Text(state.aircraftType).font(.caption).foregroundStyle(.white.opacity(0.6))
                 Spacer()
-                Text("Gate \(Display.text(state.gate))").font(.caption).foregroundStyle(.white.opacity(0.8))
+                Text("SID \(Display.text(state.sid ?? ""))").font(.caption).foregroundStyle(.white.opacity(0.8))
             }
             // 3) Geliş
             if let ib = state.freshInbound {

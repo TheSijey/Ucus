@@ -39,7 +39,7 @@ enum CDMParser {
 
         // Uçuş numarası: "TK 1751"
         guard let flightMatch = firstMatch(#"\bTK\s?(\d{1,4}[A-Z]?)\b"#, in: text) else { return nil }
-        let flight = "TK" + flightMatch[1]
+        let flight = CDMParser.cleanFlight("TK" + flightMatch[1])
 
         // Tip ve tescil: "32Q - TCLTD"
         var type = "", reg = ""
@@ -77,7 +77,72 @@ enum CDMParser {
             tsat: time("TSAT"),
             ctot: time("CTOT"),
             signOn: base.addingTimeInterval(-signOnBeforeEOBT),
-            updatedAt: now
+            updatedAt: now,
+            sid: value("SID")
+        )
+    }
+
+    /// "TK 0828" -> "TK828", "3U 3828" -> "3U3828"
+    static func cleanFlight(_ raw: String) -> String {
+        let s = raw.uppercased().replacingOccurrences(of: " ", with: "")
+        guard let m = firstMatch(#"^([A-Z0-9]{2}?)(\d{1,4})([A-Z]?)$"#, in: s), let n = Int(m[2]) else { return s }
+        return m[1] + String(n) + m[3]
+    }
+
+    /// CDM servisinin JSON cevabı (Service/api/Flight/{q}).
+    struct APIResponse: Decodable {
+        struct Flight: Decodable {
+            let flightNumber: String?
+            let callsign: String?
+            let iataCode: String?
+            let regNo: String?
+            let eobt: String?
+            let tobt: String?
+            let tsat: String?
+            let ctot: String?
+            let gateCode: String?
+            let standCode: String?
+            let runwayCode: String?
+            let adesIata: String?
+            let sid: String?
+        }
+        let data: Flight?
+    }
+
+    static func parseJSON(_ json: Data, now: Date = Date()) -> FlightAttributes.ContentState? {
+        guard let f = try? JSONDecoder().decode(APIResponse.self, from: json).data,
+              let number = f.flightNumber?.trimmingCharacters(in: .whitespaces), !number.isEmpty else { return nil }
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = TimeZone(identifier: "UTC")
+        func date(_ s: String?) -> Date? {
+            guard let s, !s.isEmpty else { return nil }
+            let core = String(s.prefix(19))
+            fmt.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+            return fmt.date(from: core)
+        }
+        func text(_ s: String?) -> String { (s ?? "").trimmingCharacters(in: .whitespaces) }
+        var reg = text(f.regNo)
+        if reg.hasPrefix("TC"), reg.count == 5 { reg = "TC-" + reg.dropFirst(2) }
+        let eobt = date(f.eobt), tobt = date(f.tobt)
+        let base = eobt ?? tobt ?? now.addingTimeInterval(signOnBeforeEOBT)
+        let sid = text(f.sid)
+        return .init(
+            flight: cleanFlight(number),
+            callsign: text(f.callsign),
+            registration: reg,
+            aircraftType: text(f.iataCode),
+            destination: text(f.adesIata),
+            gate: text(f.gateCode),
+            stand: text(f.standCode),
+            runway: text(f.runwayCode),
+            eobt: eobt,
+            tobt: tobt,
+            tsat: date(f.tsat),
+            ctot: date(f.ctot),
+            signOn: base.addingTimeInterval(-signOnBeforeEOBT),
+            updatedAt: now,
+            sid: sid.isEmpty ? nil : sid
         )
     }
 
@@ -97,7 +162,7 @@ enum CDMParser {
         return date
     }
 
-    private static func firstMatch(_ pattern: String, in text: String) -> [String]? {
+    static func firstMatch(_ pattern: String, in text: String) -> [String]? {
         guard let re = try? NSRegularExpression(pattern: pattern),
               let m = re.firstMatch(in: text, range: NSRange(text.startIndex..., in: text))
         else { return nil }

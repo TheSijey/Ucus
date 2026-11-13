@@ -22,6 +22,7 @@ struct FlightAttributes: ActivityAttributes {
         var leaveAt: Date? = nil    // evden çıkış (imza - ayar); yoksa sadece imza sayacı
         var inbound: InboundInfo? = nil  // uçağın gelen seferi
         var turn: TurnInfo? = nil        // varış ve dönüş seferi
+        var sid: String? = nil           // kalkış SID (CDM)
     }
 
     /// Kullanıcının aradığı şey (1751, LTD ...). Yenilemede tekrar kullanılır.
