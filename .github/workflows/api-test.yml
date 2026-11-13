@@ -5,11 +5,17 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    environment: APPLE_TEAM_ID
     steps:
-      - name: CDM servis
-        continue-on-error: true
+      - name: TC-JSO gün listesi
+        env:
+          KEY: ${{ secrets.RAPIDAPI_KEY }}
         run: |
-          curl -s https://mobilecdm.igairport.aero/main.6c7227d6935ca229.js | grep -oE 'getDefaultHeaders\(.{0,400}' | head -2
-          for q in TK828 828 TK1355 LPO; do
-            echo "=== $q"; curl -s -m 20 -H "Auto-Refresh: true" -H "Accept: application/json" "https://mobilecdm.igairport.aero/Service/api/Flight/$q" | head -c 1500; echo
+          for d in 2026-11-12 2026-11-13; do
+            curl -s -o o.json -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
+              "https://aerodatabox.p.rapidapi.com/flights/reg/TC-JSO/$d?withAircraftImage=false&withLocation=false"
+            echo "== $d"; jq -r '.[]? | "\(.number) \(.departure.airport.iata)->\(.arrival.airport.iata) dep=\(.departure.scheduledTime.utc // "-") arr=\(.arrival.scheduledTime.utc // "-") rev=\(.arrival.revisedTime.utc // "-") status=\(.status)"' o.json || head -c 300 o.json
           done
+          curl -s -o o.json -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
+            "https://aerodatabox.p.rapidapi.com/flights/number/TK2033/2026-11-13?withAircraftImage=false&withLocation=false"
+          echo "== TK2033"; jq -r '.[]? | "\(.number) reg=\(.aircraft.reg) \(.departure.airport.iata)->\(.arrival.airport.iata) status=\(.status) arr=\(.arrival.revisedTime.utc // .arrival.scheduledTime.utc)"' o.json
