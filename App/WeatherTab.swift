@@ -236,16 +236,7 @@ struct RunwayWindCard: View {
                             .foregroundStyle(Palette.stand)
                     }
                 }
-                HStack(alignment: .center, spacing: 18) {
-                    drawing(c, maxSpeed: max(wind.speed, wind.gust ?? 0))
-                    VStack(alignment: .leading, spacing: 10) {
-                        valueBlock(title: c.head >= 0 ? "karşı" : "arka", value: abs(c.head),
-                                   gust: c.gustHead.map { abs($0) }, color: c.head >= 0 ? Palette.outbound : .red)
-                        valueBlock(title: "yan · \(c.crossFromLeft ? "soldan" : "sağdan")", value: c.cross,
-                                   gust: c.gustCross, color: Palette.warn)
-                    }
-                    Spacer(minLength: 0)
-                }
+                drawing(c, maxSpeed: max(wind.speed, wind.gust ?? 0))
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(comps) { r in
@@ -278,67 +269,100 @@ struct RunwayWindCard: View {
         return nil
     }
 
-    private func valueBlock(title: String, value: Int, gust: Int?, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text("\(value) kt").font(.title3.bold()).foregroundStyle(color)
-                Text(title).font(.subheadline).foregroundStyle(color.opacity(0.85))
+    /// Değer etiketi: "15 kt karşı" + hamle.
+    private func label(_ value: Int, _ title: String, gust: Int?, color: Color, trailing: Bool = false) -> some View {
+        VStack(alignment: trailing ? .trailing : .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("\(value) kt").font(.title3.bold())
+                Text(title).font(.subheadline)
             }
+            .foregroundStyle(color)
             if let gust, gust != value {
                 Text("hamle \(gust) kt").font(.caption).foregroundStyle(Palette.secondary)
             }
         }
+        .fixedSize()
     }
 
-    /// Küçük çizim: pist yukarı doğru, oklar bileşenleri gösterir.
+    private func vArrow(down: Bool, length: CGFloat, color: Color) -> some View {
+        VStack(spacing: 0) {
+            if !down { Image(systemName: "arrowtriangle.up.fill").font(.system(size: 12)) }
+            Rectangle().frame(width: 4, height: length)
+            if down { Image(systemName: "arrowtriangle.down.fill").font(.system(size: 12)) }
+        }
+        .foregroundStyle(color)
+    }
+
+    private func hArrow(right: Bool, length: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            if !right { Image(systemName: "arrowtriangle.left.fill").font(.system(size: 12)) }
+            Rectangle().frame(width: length, height: 4)
+            if right { Image(systemName: "arrowtriangle.right.fill").font(.system(size: 12)) }
+        }
+        .foregroundStyle(Palette.warn)
+    }
+
+    /// Pilot görünümü: pist ortada yukarı doğru; karşı rüzgâr pistin ucundan, yan rüzgâr geldiği taraftan.
+    /// Her okun değeri hemen yanında yazar.
     private func drawing(_ c: RunwayWind, maxSpeed: Int) -> some View {
-        let h: CGFloat = 120
         let scale = CGFloat(max(maxSpeed, 1))
-        let headLen = max(10, CGFloat(abs(c.head)) / scale * 46)
-        let crossLen = max(10, CGFloat(c.cross) / scale * 34)
-        return ZStack {
-            RoundedRectangle(cornerRadius: 3).fill(Color(white: 0.24)).frame(width: 26, height: h)
-            Rectangle().fill(Color.white.opacity(0.6)).frame(width: 2, height: h - 34)
-                .mask(VStack(spacing: 6) { ForEach(0..<8, id: \.self) { _ in Rectangle().frame(height: 6) } })
-            VStack {
-                Spacer()
-                Text(c.runway).font(.system(size: 10, weight: .heavy)).foregroundStyle(.white).padding(.bottom, 3)
+        let headLen = max(12, CGFloat(abs(c.head)) / scale * 34)
+        let crossLen = max(12, CGFloat(c.cross) / scale * 40)
+        let headColor = c.head >= 0 ? Palette.outbound : Color.red
+        let headLabel = label(abs(c.head), c.head >= 0 ? "karşı" : "arka",
+                              gust: c.gustHead.map { abs($0) }, color: headColor)
+        let crossTitle = "yan · \(c.crossFromLeft ? "soldan" : "sağdan")"
+        let runwayW: CGFloat = 26
+
+        return VStack(spacing: 4) {
+            if c.head > 0 {
+                HStack(alignment: .bottom, spacing: 10) {
+                    Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                    vArrow(down: true, length: headLen, color: headColor).frame(width: runwayW)
+                    headLabel.frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
-            .frame(height: h)
-            // Karşı (yukarıdan aşağı) / arka (aşağıdan yukarı)
-            if c.head != 0 {
-                VStack(spacing: 0) {
-                    if c.head > 0 {
-                        Rectangle().frame(width: 4, height: headLen)
-                        Image(systemName: "arrowtriangle.down.fill").font(.system(size: 11))
-                        Spacer()
-                    } else {
-                        Spacer()
-                        Image(systemName: "arrowtriangle.up.fill").font(.system(size: 11))
-                        Rectangle().frame(width: 4, height: headLen)
+            HStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    if c.cross > 0, c.crossFromLeft {
+                        label(c.cross, crossTitle, gust: c.gustCross, color: Palette.warn, trailing: true)
+                        hArrow(right: true, length: crossLen)
                     }
                 }
-                .foregroundStyle(c.head > 0 ? Palette.outbound : .red)
-                .frame(height: h)
-                .offset(x: -26)
-            }
-            // Yan: rüzgârın geldiği taraftan pistin üzerine doğru
-            if c.cross > 0 {
-                HStack(spacing: 0) {
-                    if c.crossFromLeft {
-                        Rectangle().frame(width: crossLen, height: 4)
-                        Image(systemName: "arrowtriangle.right.fill").font(.system(size: 11))
-                    } else {
-                        Image(systemName: "arrowtriangle.left.fill").font(.system(size: 11))
-                        Rectangle().frame(width: crossLen, height: 4)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 3).fill(Color(white: 0.24))
+                    Rectangle().fill(Color.white.opacity(0.6)).frame(width: 2).padding(.vertical, 16)
+                        .mask(VStack(spacing: 6) { ForEach(0..<7, id: \.self) { _ in Rectangle().frame(height: 6) } })
+                    VStack {
+                        Spacer()
+                        Text(c.runway).font(.system(size: 10, weight: .heavy)).foregroundStyle(.white).padding(.bottom, 3)
                     }
                 }
-                .foregroundStyle(Palette.warn)
-                .offset(x: c.crossFromLeft ? -(13 + crossLen / 2 + 6) : (13 + crossLen / 2 + 6), y: 4)
+                .frame(width: runwayW, height: 90)
+                HStack(spacing: 8) {
+                    if c.cross > 0, !c.crossFromLeft {
+                        hArrow(right: false, length: crossLen)
+                        label(c.cross, crossTitle, gust: c.gustCross, color: Palette.warn)
+                    } else if c.cross == 0 {
+                        Text("yan rüzgâr yok").font(.subheadline).foregroundStyle(Palette.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if c.head < 0 {
+                HStack(alignment: .top, spacing: 10) {
+                    Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                    vArrow(down: false, length: headLen, color: headColor).frame(width: runwayW)
+                    headLabel.frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else if c.head == 0 {
+                Text("karşı/arka rüzgâr yok").font(.subheadline).foregroundStyle(Palette.secondary)
             }
         }
-        .frame(width: 110, height: h)
+        .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Pist \(c.runway): \(c.head >= 0 ? "karşı" : "arka") \(abs(c.head)) knot, yan \(c.cross) knot")
+        .accessibilityLabel("Pist \(c.runway): \(c.head >= 0 ? "karşı" : "arka") \(abs(c.head)) knot, yan \(c.cross) knot \(c.crossFromLeft ? "soldan" : "sağdan")")
     }
+
 }
