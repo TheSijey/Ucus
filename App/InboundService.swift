@@ -374,12 +374,26 @@ enum AeroDataBox {
             f.arrival?.runwayTime?.date ?? f.arrival?.revisedTime?.date ?? f.arrival?.predictedTime?.date ?? f.arrival?.scheduledTime?.date
         }
 
-        // Gidiş: aynı gün, İstanbul kalkışlı, kalkışa en yakın olan
-        let outCandidates = await byNumber(ours, day: day)
-            .filter { $0.departure?.airport?.icao == InboundService.airport }
-        guard let out = outCandidates.min(by: {
-            abs((depRef($0) ?? .distantFuture).timeIntervalSince(ref)) < abs((depRef($1) ?? .distantFuture).timeIntervalSince(ref))
-        }), let dest = out.arrival?.airport else { return nil }
+        // Gidiş: aynı gün, İstanbul kalkışlı, kalkışa en yakın olan.
+        // AeroDataBox bazen kalkış meydanı kodunu boş verir (sadece "Istanbul" adı, saat yok): CDM zaten
+        // İstanbul kalkışını doğruladığı için kodu boş olanı da kabul et.
+        func fromIstanbul(_ f: Flight) -> Bool {
+            if let icao = f.departure?.airport?.icao { return icao == InboundService.airport }
+            let name = (f.departure?.airport?.name ?? "").lowercased()
+            return (name.isEmpty || name.contains("istanbul")) && f.arrival?.airport?.icao != InboundService.airport
+        }
+        // Kalkış saati yoksa varıştan karşılaştır
+        func closeness(_ f: Flight) -> TimeInterval {
+            if let d = depRef(f) { return abs(d.timeIntervalSince(ref)) }
+            if let a = arrRef(f) { return abs(a.timeIntervalSince(ref)) + 1 }
+            return .infinity
+        }
+        let outCandidates = await byNumber(ours, day: day).filter(fromIstanbul)
+        guard let out = outCandidates.min(by: { closeness($0) < closeness($1) }),
+              let dest = out.arrival?.airport else {
+            DebugLog.add("Tur: \(ours) için İstanbul kalkışlı gidiş bulunamadı")
+            return nil
+        }
         let outArrival = arrRef(out)
 
         // Dönüş: numara +1 / -1, varış meydanından İstanbul'a, gidişin varışından sonra
