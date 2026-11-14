@@ -27,8 +27,9 @@ struct WeatherTab: View {
                         if let w = items.first(where: { $0.icao == selected }) {
                             metarCard(w)
                             RunwayWindCard(weather: w,
-                                           active: selected == (s.origin ?? "LTFM") ? s.runway : "",
-                                           history: s.isOutstation || selected == "LTFM" ? [] : (s.turn?.destRunwayHistory ?? []))
+                                           active: activeRunway(s),
+                                           history: s.isOutstation || selected == "LTFM" ? [] : (s.turn?.destRunwayHistory ?? []),
+                                           event: nextEvent(s))
                                 .id(w.icao)
                             if let taf = w.taf {
                                 tafCard(taf, events: FlightHelpers.weatherEvents(s)[w.icao] ?? [])
@@ -131,6 +132,20 @@ struct WeatherTab: View {
         }
     }
 
+    /// CDM pisti sadece kalkış meydanında ve kalkıştan (10 dk sonrasına) kadar geçerli.
+    private func activeRunway(_ s: FlightAttributes.ContentState) -> String {
+        guard selected == (s.origin ?? "LTFM") else { return "" }
+        if let dep = s.departureTime, Date() > dep.addingTimeInterval(10 * 60) { return "" }
+        return s.runway
+    }
+
+    /// Bu meydandaki sıradaki kalkış/iniş (15 dk önce geçmiş olanlar dahil).
+    private func nextEvent(_ s: FlightAttributes.ContentState) -> WeatherEvent? {
+        (FlightHelpers.weatherEvents(s)[selected] ?? [])
+            .filter { $0.time > Date().addingTimeInterval(-15 * 60) }
+            .min { $0.time < $1.time }
+    }
+
     // MARK: TAF
 
     private func tafCard(_ taf: String, events: [WeatherEvent]) -> some View {
@@ -202,12 +217,24 @@ struct MetarSummary {
 /// Kompakt pist rüzgârı kartı (pilot görünümü): pist yukarı doğru, yeşil karşı / kırmızı arka, turuncu yan.
 struct RunwayWindCard: View {
     let weather: AirportWeather
-    let active: String          // CDM aktif pisti (İstanbul)
+    let active: String          // CDM aktif pisti (İstanbul, kalkıştan önce)
     let history: [String]       // son seferlerde varışta kullanılan pistler
+    var event: WeatherEvent? = nil   // bu meydandaki sıradaki kalkış/iniş
     @State private var selected: String?
 
+    /// Olay 45 dk'dan uzaksa TAF'taki o saatin rüzgârı, değilse METAR.
+    private var forecast: (wind: Wind, source: String, label: String?)? {
+        if let ev = event, ev.time.timeIntervalSinceNow > 45 * 60,
+           let taf = weather.taf, let w = TafParser.wind(taf, at: ev.time), w.direction != nil {
+            return (w, "TAF", ev.label)
+        }
+        guard let m = weather.metar, let w = Wind.parse(m) else { return nil }
+        return (w, "METAR", nil)
+    }
+
     var body: some View {
-        if let m = weather.metar, let wind = Wind.parse(m) {
+        if let f = forecast {
+            let wind = f.wind
             Card {
                 if wind.direction == nil {
                     VStack(alignment: .leading, spacing: 4) {
@@ -215,15 +242,15 @@ struct RunwayWindCard: View {
                         Text(L("Rüzgâr değişken \(wind.speed) kt", "Wind variable \(wind.speed) kt")).font(.subheadline).foregroundStyle(Palette.secondary)
                     }
                 } else {
-                    content(wind: wind, comps: WindCalc.components(wind: wind, runways: weather.runways))
+                    content(wind: wind, comps: WindCalc.components(wind: wind, runways: weather.runways), source: f.source, label: f.label)
                 }
             }
         }
     }
 
     @ViewBuilder
-    private func content(wind: Wind, comps: [RunwayWind]) -> some View {
-        let pick = defaultPick(comps)
+    private func content(wind: Wind, comps: [RunwayWind], source: String, label: String?) -> some View {
+        let pick = defaultPick(comps, label: label)
         let current = comps.first { $0.runway == (selected ?? pick.runway) } ?? comps.first
         if let c = current {
             VStack(alignment: .leading, spacing: 10) {
@@ -239,6 +266,8 @@ struct RunwayWindCard: View {
                             .foregroundStyle(Palette.stand)
                     }
                 }
+                Text(windLine(wind, source: source, label: label))
+                    .font(.caption).foregroundStyle(source == "TAF" ? (event?.isReturn == true ? Palette.ret : Palette.outbound) : Palette.secondary)
                 drawing(c, maxSpeed: max(wind.speed, wind.gust ?? 0))
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -258,11 +287,21 @@ struct RunwayWindCard: View {
         }
     }
 
-    private func defaultPick(_ comps: [RunwayWind]) -> (runway: String, reason: String) {
+    private func windLine(_ w: Wind, source: String, label: String?) -> String {
+        let dir = w.direction.map { String(format: "%03d°", $0) } ?? "VRB"
+        let value = "\(dir) \(w.speed)" + (w.gust.map { "G\($0)" } ?? "") + " kt"
+        if source == "TAF", let label, let t = event?.time {
+            return L("\(label) \(FlightHelpers.utc(t)) için TAF rüzgârı: \(value)", "TAF wind for \(label.lowercased()) \(FlightHelpers.utc(t)): \(value)")
+        }
+        return L("Şu anki rüzgâr (METAR): \(value)", "Current wind (METAR): \(value)")
+    }
+
+    private func defaultPick(_ comps: [RunwayWind], label: String?) -> (runway: String, reason: String) {
         if !active.isEmpty, comps.contains(where: { $0.runway == active }) { return (active, L("aktif", "active")) }
         if let h = FlightHelpers.mostCommon(history), comps.contains(where: { $0.runway == h }) {
             return (h, L("son seferlerde \(h)", "recently \(h)"))
         }
+        if let label { return (comps.first?.runway ?? "", L("\(label.lowercased(with: Lang.locale)) için muhtemel", "likely for \(label.lowercased())")) }
         return (comps.first?.runway ?? "", L("rüzgâra göre muhtemel", "likely by wind"))
     }
 

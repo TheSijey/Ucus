@@ -329,6 +329,25 @@ extension TafParser {
         return Set(owner.values)
     }
 
+    /// TAF'a göre verilen andaki temel rüzgâr: ana/FM grubu + o ana kadar başlamış BECMG'ler (TEMPO hariç).
+    /// Saat TAF süresinin dışındaysa nil.
+    static func wind(_ taf: String, at time: Date) -> Wind? {
+        let gs = groups(taf)
+        if let start = gs.first?.start, let end = gs.first?.end, time < start || time > end { return nil }
+        guard let base = gs.last(where: { $0.kind == "ANA" || ($0.kind == "FM" && ($0.start ?? .distantFuture) <= time) })
+        else { return nil }
+        func windOf(_ text: String) -> Wind? {
+            let tok = text.split(separator: " ").map(String.init)
+                .first { $0.range(of: #"^(\d{3}|VRB)\d{2,3}(G\d{2,3})?(KT|MPS)$"#, options: .regularExpression) != nil }
+            return tok.flatMap(Wind.parse)
+        }
+        var w = windOf(base.text)
+        for g in gs where g.id > base.id && g.kind == "BECMG" && (g.start ?? .distantFuture) <= time {
+            if let bw = windOf(g.text) { w = bw }
+        }
+        return w
+    }
+
     /// Olay saatinin ±1 saatinde geçerli gruplar: kalıcı olanlar (iki uçta) + çakışan TEMPO/PROB.
     static func applicable(_ groups: [TafGroup], event: Date) -> Set<Int> {
         let from = event.addingTimeInterval(-3600), to = event.addingTimeInterval(3600)
