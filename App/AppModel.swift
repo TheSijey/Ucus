@@ -1,7 +1,7 @@
 import ActivityKit
 import SwiftUI
 
-enum AppTab: Hashable { case today, tour, weather, flights }
+enum AppTab: Hashable { case today, tour, briefing, flights }
 
 /// Sekmelerin ortak durumu ve işlemleri.
 @MainActor

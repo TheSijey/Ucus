@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// Hava: meydan seçici, METAR özeti, pist rüzgârı, işaretli TAF.
-struct WeatherTab: View {
-    @EnvironmentObject var model: AppModel
+/// Hava bölümü (Brifing içinde): meydan seçici, önemli durumlar, METAR özeti, pist rüzgârı, işaretli TAF.
+struct WeatherSection: View {
     @ObservedObject var session = FlightSession.shared
     @State private var items: [AirportWeather] = []
     @State private var selected = "LTFM"
@@ -10,54 +9,43 @@ struct WeatherTab: View {
     @State private var pickedByUser = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                if let s = session.state {
-                    let airports = FlightHelpers.airports(s)
-                    VStack(spacing: 12) {
-                        if airports.count > 1 {
-                            Picker(L("Meydan", "Airport"), selection: Binding(get: { selected }, set: { selected = $0; pickedByUser = true })) {
-                                ForEach(airports, id: \.self) { icao in
-                                    Text(label(icao, s)).tag(icao)
-                                }
-                            }
-                            .pickerStyle(.segmented)
+        if let s = session.state {
+            let airports = FlightHelpers.airports(s)
+            VStack(spacing: 12) {
+                if airports.count > 1 {
+                    Picker(L("Meydan", "Airport"), selection: Binding(get: { selected }, set: { selected = $0; pickedByUser = true })) {
+                        ForEach(airports, id: \.self) { icao in
+                            Text(label(icao, s)).tag(icao)
                         }
-                        highlights
-                        if let w = items.first(where: { $0.icao == selected }) {
-                            metarCard(w)
-                            RunwayWindCard(weather: w,
-                                           active: activeRunway(s),
-                                           history: s.isOutstation || selected == "LTFM" ? [] : (s.turn?.destRunwayHistory ?? []),
-                                           event: nextEvent(s))
-                                .id(w.icao)
-                            if let taf = w.taf {
-                                tafCard(taf, events: FlightHelpers.weatherEvents(s)[w.icao] ?? [])
-                            }
-                        } else if loading {
-                            ProgressView().padding(40)
-                        } else {
-                            Text(L("Hava durumu alınamadı.", "Couldn't load weather.")).foregroundStyle(Palette.secondary).padding(40)
-                        }
-                        Text(L("Kaynak: aviationweather.gov · 10 dk'da bir yenilenir · bilgi amaçlıdır", "Source: aviationweather.gov · refreshed every 10 min · for information only"))
-                            .font(.caption2).foregroundStyle(Palette.secondary)
                     }
-                    .padding(16)
-                    .task(id: "\(airports.joined())|\(s.updatedAt.timeIntervalSince1970)") {
-                        loading = true
-                        let r = await WeatherService.fetch(airports)
-                        if !r.isEmpty { items = r }
-                        if !airports.contains(selected) || (s.isOutstation && selected == "LTFM" && !pickedByUser) { selected = airports.first ?? "LTFM" }
-                        loading = false
-                    }
-                } else {
-                    EmptyFlightView().padding(.top, 60)
+                    .pickerStyle(.segmented)
                 }
+                highlights
+                if let w = items.first(where: { $0.icao == selected }) {
+                    metarCard(w)
+                    RunwayWindCard(weather: w,
+                                   active: activeRunway(s),
+                                   history: s.isOutstation || selected == "LTFM" ? [] : (s.turn?.destRunwayHistory ?? []),
+                                   event: nextEvent(s))
+                        .id(w.icao)
+                    if let taf = w.taf {
+                        tafCard(taf, events: FlightHelpers.weatherEvents(s)[w.icao] ?? [])
+                    }
+                } else if loading {
+                    ProgressView().padding(40)
+                } else {
+                    Text(L("Hava durumu alınamadı.", "Couldn't load weather.")).foregroundStyle(Palette.secondary).padding(40)
+                }
+                Text(L("Kaynak: aviationweather.gov · 10 dk'da bir yenilenir · bilgi amaçlıdır", "Source: aviationweather.gov · refreshed every 10 min · for information only"))
+                    .font(.caption2).foregroundStyle(Palette.secondary)
             }
-            .background(Palette.bg)
-            .navigationTitle(L("Hava", "Weather"))
-            .toolbar { CommonToolbar() }
-            .refreshable { await model.refresh() }
+            .task(id: "\(airports.joined())|\(s.updatedAt.timeIntervalSince1970)") {
+                loading = true
+                let r = await WeatherService.fetch(airports)
+                if !r.isEmpty { items = r }
+                if !airports.contains(selected) || (s.isOutstation && selected == "LTFM" && !pickedByUser) { selected = airports.first ?? "LTFM" }
+                loading = false
+            }
         }
     }
 

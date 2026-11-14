@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Uygulamanın kökü: 4 sekme (Bugün · Tur · Hava · Uçuşlarım).
+/// Uygulamanın kökü: 4 sekme (Bugün · Tur · Brifing · Uçuşlarım).
 struct ContentView: View {
     @StateObject private var model = AppModel()
     @ObservedObject private var session = FlightSession.shared
@@ -16,9 +16,9 @@ struct ContentView: View {
             TourView()
                 .tabItem { Label(L("Tur", "Trip"), systemImage: "point.topleft.down.to.point.bottomright.curvepath") }
                 .tag(AppTab.tour)
-            WeatherTab()
-                .tabItem { Label(L("Hava", "Weather"), systemImage: "cloud.sun") }
-                .tag(AppTab.weather)
+            BriefingView()
+                .tabItem { Label(L("Brifing", "Briefing"), systemImage: "list.clipboard") }
+                .tag(AppTab.briefing)
             FlightsView(store: model.store)
                 .tabItem { Label(L("Uçuşlarım", "My Flights"), systemImage: "list.bullet") }
                 .tag(AppTab.flights)

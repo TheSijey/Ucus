@@ -147,7 +147,7 @@ struct TodayView: View {
     private var highlightsBanner: some View {
         let items = weather.flatMap { WeatherHighlights.scan(icao: $0.icao, metar: $0.metar, taf: $0.taf) }
         if !weather.isEmpty {
-            Button { model.tab = .weather } label: {
+            Button { model.tab = .briefing } label: {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: items.isEmpty ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .foregroundStyle(items.isEmpty ? Palette.outbound : Palette.warn)
