@@ -44,7 +44,7 @@ struct EntryEditor: View {
                     if original.kind == .sleep {
                         Toggle("Uyandı", isOn: $hasEnd)
                         if hasEnd {
-                            DatePicker("Uyandı", selection: $end, in: start...Date())
+                            DatePicker("Uyandı", selection: $end, in: start...max(start, Date()))
                         }
                     }
                 }
