@@ -6,12 +6,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: atis.guru yapısı
+      - name: atis.guru kart yapısı
         continue-on-error: true
         run: |
           curl -s -L -m 20 -A "Mozilla/5.0" -o p.html "https://atis.guru/atis/LTFM"
-          wc -c p.html
-          grep -oE '(src|href)="[^"]+"' p.html | head -20
-          grep -oiE '.{0,120}(information|atis [a-z]|requested by|no atis|not available|unavailable).{0,200}' p.html | head -12
-          grep -oE '(fetch|axios)\([^)]{0,120}\)|/api/[A-Za-z0-9/_\-\.?=&]+' p.html | sort -u | head
-          for a in OLBA KJFK; do curl -s -L -m 20 -A "Mozilla/5.0" "https://atis.guru/atis/$a" | grep -oiE '.{0,80}(information|requested by).{0,240}' | head -3 | sed "s/^/$a: /"; done
+          python3 - <<'PY'
+          s = open('p.html', encoding='utf-8').read()
+          i = s.find('Requested by')
+          print(s[i-700:i+900])
+          PY
