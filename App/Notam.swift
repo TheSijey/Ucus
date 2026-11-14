@@ -63,7 +63,9 @@ enum NotamParser {
         for (i, m) in matches.enumerated() {
             let start = m.range.location
             let end = i + 1 < matches.count ? matches[i + 1].range.location : ns.length
+            // Bir sonraki NOTAM'ın önündeki konum kodu (ayrı satırda "EGLL") bu bloğun sonuna yapışmasın
             let block = ns.substring(with: NSRange(location: start, length: end - start))
+                .replacingOccurrences(of: #"\n[ \t]*[A-Z]{4}[ \t]*$"#, with: "", options: .regularExpression)
             let id = ns.substring(with: m.range(at: 1))
             // Aynı NOTAM'a yapılan atıflar (NOTAMR A1234/26) ayrı blok sayılmasın: içerik çok kısaysa atla
             guard block.count > 25, !seen.contains(id) else { continue }
@@ -81,6 +83,11 @@ enum NotamParser {
             } else {
                 // Q) satırı olmayan (LIDO tarzı) biçim: kimlikten sonraki metin
                 n.text = clean(String(block.dropFirst(id.count)))
+            }
+            // Briefing paketlerinde konum çoğu zaman kimlikten önce yazılır: "EGLL C0567/26 ..."
+            if n.location.isEmpty {
+                let before = ns.substring(with: NSRange(location: max(0, start - 12), length: min(12, start)))
+                if let loc = capture(#"\b([A-Z]{4})\s*$"#, before) { n.location = loc }
             }
             if n.location.isEmpty, let loc = capture(#"\b(L[A-Z]{3}|E[A-Z]{3}|K[A-Z]{3}|O[A-Z]{3}|U[A-Z]{3})\b"#, String(block.prefix(80))) {
                 n.location = loc
