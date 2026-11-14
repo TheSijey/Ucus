@@ -60,6 +60,7 @@ enum NotificationManager {
         } else {
             cancelLeave()
         }
+        await scheduleRecord(s)
     }
 
     static func cancelLeave() {
@@ -95,6 +96,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse) async {
+        if response.notification.request.content.userInfo["openRecord"] != nil {
+            await MainActor.run { NotificationCenter.default.post(name: .openFlightRecord, object: nil) }
+        }
         await LiveActivityManager.refreshPhase()
     }
 }

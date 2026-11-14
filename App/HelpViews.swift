@@ -173,6 +173,16 @@ struct HelpView: View {
                 bullet(L("Sunum: brifingi büyük yazıyla tam ekran açar, ekibe göstermen için; ekran kapanmaz.",
                          "Present: opens the briefing full screen in large type to show the crew; the screen stays on."))
             }
+            Section(L("Meydanlar", "Airports")) {
+                bullet(L("Her meydanın Operasyon, Layover ve Yorumlar bölümü var. Pist, STAR/SID, taksi ve stand istatistikleri uçuş kayıtlarından çıkar (\"%64 27R\" gibi).",
+                         "Each airport has Operations, Layover and Comments. Runway, STAR/SID, taxi and stand statistics come from flight logs (like \"64% 27R\")."))
+                bullet(L("İnişten 15 dk sonra kısa kayıt bildirimi gelir; pist ve stand mümkünse otomatik dolar.",
+                         "15 min after landing a short log reminder arrives; runway and stand are filled in where possible."))
+                bullet(L("Filtreler: şu anki rüzgâra benzer günler ve kendi uçak tipin.",
+                         "Filters: days with a wind like now, and your own aircraft type."))
+                bullet(L("Ekip notudur; AIP, Jeppesen ve şirket prosedürlerinin yerine geçmez.",
+                         "Crew notes only; they don't replace the AIP, Jeppesen or company procedures."))
+            }
             Section(L("Hava", "Weather")) {
                 bullet(L("Brifing sekmesinin altında. İstanbul ve varış meydanı için METAR ve TAF. TAF'ta gidiş saatlerine denk gelen gruplar yeşil, dönüş saatlerine denk gelenler mavi işaretlenir.",
                          "At the bottom of the Briefing tab. METAR and TAF for Istanbul and the destination. TAF groups covering the outbound times are marked green, those covering the return times blue."))

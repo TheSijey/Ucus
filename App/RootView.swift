@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Uygulamanın kökü: 4 sekme (Bugün · Tur · Brifing · Uçuşlarım).
+/// Uygulamanın kökü: 5 sekme (Bugün · Tur · Brifing · Meydanlar · Uçuşlarım).
 struct ContentView: View {
     @StateObject private var model = AppModel()
     @ObservedObject private var session = FlightSession.shared
@@ -19,6 +19,9 @@ struct ContentView: View {
             BriefingView()
                 .tabItem { Label(L("Brifing", "Briefing"), systemImage: "list.clipboard") }
                 .tag(AppTab.briefing)
+            AirportsView()
+                .tabItem { Label(L("Meydanlar", "Airports"), systemImage: "mappin.and.ellipse") }
+                .tag(AppTab.airports)
             FlightsView(store: model.store)
                 .tabItem { Label(L("Uçuşlarım", "My Flights"), systemImage: "list.bullet") }
                 .tag(AppTab.flights)
@@ -32,6 +35,10 @@ struct ContentView: View {
         }
         .sheet(isPresented: $model.showSettings) {
             SettingsView()
+        }
+        .sheet(item: $model.recordRequest) { RecordSheet(request: $0) }
+        .onReceive(NotificationCenter.default.publisher(for: .openFlightRecord)) { _ in
+            if let s = session.state { model.recordRequest = RecordRequest.forCurrent(s) }
         }
         .alert(L("Tarih farklı", "Different date"), isPresented: Binding(get: { model.pending != nil }, set: { if !$0 { model.pending = nil } })) {
             Button(L("Yine de ekle", "Add anyway")) {

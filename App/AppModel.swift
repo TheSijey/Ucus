@@ -1,7 +1,7 @@
 import ActivityKit
 import SwiftUI
 
-enum AppTab: Hashable { case today, tour, briefing, flights }
+enum AppTab: Hashable { case today, tour, briefing, airports, flights }
 
 /// Sekmelerin ortak durumu ve işlemleri.
 @MainActor
@@ -13,6 +13,7 @@ final class AppModel: ObservableObject {
     @Published var pending: PendingStart?
     @Published var showSettings = false
     @Published var showAdd = false
+    @Published var recordRequest: RecordRequest?
 
     let store = FlightStore()
     let session = FlightSession.shared

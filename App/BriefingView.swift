@@ -18,6 +18,9 @@ struct BriefingView: View {
                     let notes = store.notes(k)
                     VStack(spacing: 12) {
                         flightCard(s)
+                        if let dest = FlightHelpers.destICAO(s), !s.isOutstation || dest != "LTFM" {
+                            AirportDigest(icao: dest)
+                        }
                         defectsCard(k, notes)
                         handwritingCard(k, notes)
                         crewNoteCard(k, notes)
@@ -55,6 +58,7 @@ struct BriefingView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Palette.bg)
+            .navigationDestination(for: String.self) { AirportDetailView(icao: $0) }
             .navigationTitle(L("Brifing", "Briefing"))
             .toolbar {
                 CommonToolbar()
@@ -344,5 +348,43 @@ extension FlightAttributes.ContentState {
     var destCode: String {
         if let d = turn?.destIATA, !d.isEmpty { return d }
         return destination
+    }
+}
+
+/// Varış meydanının özeti (Meydanlar verisinden): beklenen pist, stand bölgesi, son notlar.
+struct AirportDigest: View {
+    let icao: String
+    @ObservedObject var store = AirportStore.shared
+
+    var body: some View {
+        let arr = store.records(icao).filter { $0.phase == .arrival }
+        let rwy = AirportStats.distribution(arr.map(\.runway), limit: 1).first
+        let area = AirportStats.distribution(arr.map { AirportStats.standArea($0.stand) }, limit: 1).first
+        let notes = store.notes(icao).filter { [.hotspot, .apu, .noise, .atc].contains($0.kind) }
+            .sorted { $0.createdAt > $1.createdAt }.prefix(3)
+        NavigationLink(value: icao) {
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text(L("\(icao) notlarından", "From \(icao) notes")).font(.headline).foregroundStyle(Palette.stand)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.secondary)
+                    }
+                    if rwy == nil && notes.isEmpty {
+                        Text(L("Henüz kayıt yok. Meydan sayfasını açmak için dokun.", "No logs yet. Tap to open the airport page."))
+                            .font(.subheadline).foregroundStyle(Palette.secondary)
+                    }
+                    if rwy != nil || area != nil {
+                        HStack(spacing: 8) {
+                            if let rwy { Tile(title: L("Beklenen pist", "Expected runway"), value: "\(rwy.value) %\(rwy.percent)") }
+                            if let area { Tile(title: L("Stand bölgesi", "Stand area"), value: "\(area.value) %\(area.percent)") }
+                        }
+                    }
+                    ForEach(Array(notes)) { NoteRow(note: $0) }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .task { await store.load(icao) }
     }
 }
