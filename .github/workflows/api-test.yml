@@ -5,15 +5,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    environment: APPLE_TEAM_ID
     steps:
-      - name: Kota kontrolü
-        env:
-          KEY: ${{ secrets.RAPIDAPI_KEY }}
+      - name: atis.guru kapsamı
+        continue-on-error: true
         run: |
-          for q in TK619/2026-11-14 TK620/2026-11-14 TK620/2026-11-15; do
-            curl -s -D h.txt -o o.json -w "http=%{http_code}\n" -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
-              "https://aerodatabox.p.rapidapi.com/flights/number/$q?withAircraftImage=false&withLocation=false"
-            grep -i "ratelimit\|x-rapidapi" h.txt | grep -vi "key\|proxy-secret" | sed "s/^/HDR /"
-            echo "== $q"; jq -c '.[0] | {number, status, aircraft, departure: (.departure|{airport:(.airport|{icao,iata,name,municipalityName,timeZone}),scheduledTime,revisedTime,gate,terminal,runway}), arrival: (.arrival|{airport:(.airport|{icao,iata,municipalityName,timeZone}),scheduledTime,revisedTime,predictedTime,gate})}' o.json || head -c 300 o.json
+          for a in LTFM LTFJ OLBA GMMX EBBR ELLX EDDB EKCH KJFK; do
+            code=$(curl -s -L -m 20 -A "Mozilla/5.0" -o p.html -w "%{http_code}" "https://atis.guru/atis/$a")
+            txt=$(sed -e 's/<script[^>]*>.*<\/script>//g' -e 's/<[^>]*>/ /g' p.html | tr -s ' \n' ' ' | grep -oiE "(ATIS|INFORMATION|INFO) .{0,220}" | head -1)
+            echo "=== $a http=$code :: ${txt:0:260}"
           done
