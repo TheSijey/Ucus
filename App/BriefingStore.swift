@@ -101,7 +101,7 @@ final class BriefingStore: ObservableObject {
     }
 
     /// Uçuşun anahtarı: sefer + imza günü (UTC). Aynı seferin başka günü karışmaz.
-    static func key(for s: FlightAttributes.ContentState) -> String {
+    nonisolated static func key(for s: FlightAttributes.ContentState) -> String {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!
         let c = cal.dateComponents([.year, .month, .day], from: s.signOn)

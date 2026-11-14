@@ -341,7 +341,7 @@ private struct KindList: Identifiable {
 
 /// Meydanın saat dilimi (AirportDB'de yoksa kalkış meydanınınki).
 enum AirportTime {
-    static func zone(_ icao: String) -> TimeZone? {
+    @MainActor static func zone(_ icao: String) -> TimeZone? {
         if icao.hasPrefix("LT") { return TimeZone(identifier: "Europe/Istanbul") }
         if let s = FlightSession.shared.state, s.origin == icao { return s.originTimeZone }
         return nil

@@ -6,7 +6,7 @@ struct RecordRequest: Identifiable {
     var record: FlightRecord
     var autoFields: Set<String> = []   // otomatik doldurulan alanlar ("runway", "stand", "procedure")
 
-    init(icao: String, phase: FlightRecord.Phase) {
+    @MainActor init(icao: String, phase: FlightRecord.Phase) {
         record = FlightRecord(icao: icao, phase: phase)
         if let s = FlightSession.shared.state {
             record.flight = s.flight
@@ -15,7 +15,7 @@ struct RecordRequest: Identifiable {
     }
 
     /// Takip edilen uçuş için: varıştan sonra varış kaydı, öncesinde kalkış kaydı.
-    static func forCurrent(_ s: FlightAttributes.ContentState) -> RecordRequest {
+    @MainActor static func forCurrent(_ s: FlightAttributes.ContentState) -> RecordRequest {
         let landed = s.turn?.outboundArrival.map { Date() > $0 } ?? false
         if landed, let dest = FlightHelpers.destICAO(s) {
             var r = RecordRequest(icao: dest, phase: .arrival)
