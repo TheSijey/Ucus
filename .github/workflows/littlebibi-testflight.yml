@@ -1,0 +1,93 @@
+name: TestFlight LittleBibi
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: "TestFlight'a yükle (kapalıysa sadece derleme testi)"
+        type: boolean
+        default: true
+  push:
+    branches: [main, littlebibi]
+    paths:
+      - 'LittleBibi/**'
+      - '.github/workflows/littlebibi-testflight.yml'
+
+jobs:
+  build:
+    runs-on: macos-15
+    environment: APPLE_TEAM_ID
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: LittleBibi
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: En yeni Xcode'u seç
+        run: |
+          ls -d /Applications/Xcode*.app
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -v -i beta | sort -V | tail -1)
+          [ -n "$XC" ] && sudo xcode-select -s "$XC"
+          xcodebuild -version
+
+      - name: XcodeGen ile proje oluştur
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: App Store Connect anahtarı
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          # Yapıştırırken bozulan satır sonlarını/boşlukları düzeltip geçerli PEM'e çevir
+          python3 - "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" <<'PY'
+          import os, re, sys, base64, textwrap
+          raw = os.environ["ASC_KEY_P8"]
+          body = re.sub(r"-----(BEGIN|END)[A-Z ]*-----", "", raw)
+          body = re.sub(r"[^A-Za-z0-9+/=]", "", body)
+          print("Başlık var mı:", "BEGIN" in raw, "| Anahtar uzunluğu:", len(body), "karakter (normali 200)")
+          base64.b64decode(body)  # bozuksa burada hata verir
+          pem = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(textwrap.wrap(body, 64)) + "\n-----END PRIVATE KEY-----\n"
+          open(sys.argv[1], "w").write(pem)
+          PY
+
+      # İmzasız arşiv; imzayı aşağıda Apple'ın bulut sertifikası atar (Mac'te sertifika gerekmez).
+      - name: Arşivle
+        run: |
+          xcodebuild archive \
+            -project LittleBibi.xcodeproj -scheme LittleBibi -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/LittleBibi.xcarchive" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: İmzala ve TestFlight'a yükle
+        if: ${{ inputs.upload || github.ref == 'refs/heads/main' || contains(github.event.head_commit.message, '[testflight]') }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/LittleBibi.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
