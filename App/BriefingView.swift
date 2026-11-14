@@ -21,7 +21,9 @@ struct BriefingView: View {
                         if let dest = FlightHelpers.destICAO(s), !s.isOutstation || dest != "LTFM" {
                             AirportDigest(icao: dest)
                         }
+                        NotamCard(state: s)
                         defectsCard(k, notes)
+                        DGCard(key: k)
                         handwritingCard(k, notes)
                         crewNoteCard(k, notes)
                         HStack {
@@ -317,6 +319,15 @@ struct PresentationView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         Text(L("Kabin arızaları", "Cabin defects")).font(.title2.bold()).foregroundStyle(Palette.warn)
                         ForEach(notes.defects) { DefectRow(defect: $0, big: true) }
+                    }
+                }
+                if let dg = notes.dgItems, !dg.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(L("Uçakta DG", "Dangerous goods")).font(.title2.bold()).foregroundStyle(Palette.warn)
+                        ForEach(dg) { item in
+                            Text(([item.drill, item.un, item.position].filter { !$0.isEmpty }).joined(separator: " · "))
+                                .font(.title2.bold())
+                        }
                     }
                 }
                 if let data = notes.drawing {

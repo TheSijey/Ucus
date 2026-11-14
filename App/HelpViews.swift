@@ -173,6 +173,20 @@ struct HelpView: View {
                 bullet(L("Sunum: brifingi büyük yazıyla tam ekran açar, ekibe göstermen için; ekran kapanmaz.",
                          "Present: opens the briefing full screen in large type to show the crew; the screen stays on."))
             }
+            Section("NOTAM") {
+                bullet(L("Brifing'de NOTAM kartından briefing PDF'ini içe aktar ya da metni yapıştır. PDF'i Dosyalar'dan veya paylaş menüsünden \"Uçuş\" ile açmak da olur.",
+                         "Import the briefing PDF or paste the text from the NOTAM card in Briefing. You can also open the PDF with \"Uçuş\" from Files or the share menu."))
+                bullet(L("Uçuş saatinde geçerli olanlar süzülür ve kritik (pist, ILS, meydan kapalı), önemli (taksi yolu, stand, ışık, navaid) ve bilgi olarak gruplanır. Hiçbir NOTAM silinmez.",
+                         "NOTAMs valid at flight time are filtered and grouped as critical (runway, ILS, aerodrome closed), important (taxiway, stand, lighting, navaids) and info. No NOTAM is deleted."))
+                bullet(L("Apple Intelligence olan cihazlarda kritik ve önemli NOTAM'lar telefonda, internetsiz özetlenir. Orijinal metin her zaman bir dokunuşla açılır.",
+                         "On devices with Apple Intelligence, critical and important NOTAMs are summarized on-device, offline. The original is always one tap away."))
+            }
+            Section(L("Tehlikeli madde (DG)", "Dangerous goods (DG)")) {
+                bullet(L("Brifing'de \"Uçakta DG\" kartına NOTOC'taki drill kodunu gir; drill tablondaki yapılacaklar hemen görünür.",
+                         "Enter the NOTOC drill code in the \"Dangerous goods\" card; the actions from your drill table appear right away."))
+                bullet(L("Tablo ICAO'nun telifli yayını olduğu için hazır gelmez: şirket OM'sinden gir ya da \"kod;başlık;yapılacaklar\" satırlı bir dosyayı içe aktar.",
+                         "The table isn't bundled because it's ICAO copyright: enter it from your company OM or import a file of \"code;title;actions\" lines."))
+            }
             Section(L("Meydanlar", "Airports")) {
                 bullet(L("Her meydanın Operasyon, Layover ve Yorumlar bölümü var. Pist, STAR/SID, taksi ve stand istatistikleri uçuş kayıtlarından çıkar (\"%64 27R\" gibi).",
                          "Each airport has Operations, Layover and Comments. Runway, STAR/SID, taxi and stand statistics come from flight logs (like \"64% 27R\")."))

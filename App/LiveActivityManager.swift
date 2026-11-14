@@ -70,7 +70,7 @@ enum LiveActivityManager {
         }
 
         FlightSession.shared.set(query: query, state: state)
-        if Date() < state.hideAt {
+        if Date() < state.hideAt, ActivityAuthorizationInfo().areActivitiesEnabled {
             let content = ActivityContent(state: state, staleDate: state.hideAt)
             let activity = try Activity.request(attributes: FlightAttributes(query: query), content: content, pushType: nil)
             ActivityObserver.watch(activity)

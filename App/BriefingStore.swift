@@ -81,8 +81,9 @@ struct BriefingNotes: Codable, Hashable {
     var crewNote: String = ""
     var drawing: Data? = nil
     var createdAt = Date()
+    var dgItems: [DGItem]? = nil
 
-    var isEmpty: Bool { defects.isEmpty && crewNote.isEmpty && drawing == nil }
+    var isEmpty: Bool { defects.isEmpty && crewNote.isEmpty && drawing == nil && (dgItems ?? []).isEmpty }
 }
 
 @MainActor

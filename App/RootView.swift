@@ -26,6 +26,7 @@ struct ContentView: View {
                 .tabItem { Label(L("Uçuşlarım", "My Flights"), systemImage: "list.bullet") }
                 .tag(AppTab.flights)
         }
+        .tabViewStyle(.sidebarAdaptable)   // iPad'de kenar çubuğu
         .id(language)   // dil değişince tüm ekranlar yeniden çizilir
         .environmentObject(model)
         .tint(Palette.stand)
@@ -53,6 +54,14 @@ struct ContentView: View {
             OnboardingView()
         }
         .onOpenURL { url in
+            if url.isFileURL {
+                // Dosyalar / paylaş menüsünden açılan briefing PDF'i: takip edilen uçuşun NOTAM'larına aktarılır
+                if let s = session.state, let text = NotamParser.pdfText(url), !text.isEmpty {
+                    NotamStore.shared.importText(text, source: url.lastPathComponent, key: BriefingStore.key(for: s))
+                    model.tab = .briefing
+                }
+                return
+            }
             guard url.scheme == "ucus" else { return }
             if url.host == "refresh" {
                 model.tab = .today

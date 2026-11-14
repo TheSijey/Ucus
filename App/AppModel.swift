@@ -65,7 +65,7 @@ final class AppModel: ObservableObject {
             error = L("Bu uçuşun turu bitmiş görünüyor, eklenmedi.", "This flight's trip seems to be over; not added.")
             return
         }
-        if state.hideAt > Date(), !ActivityAuthorizationInfo().areActivitiesEnabled {
+        if state.hideAt > Date(), UIDevice.current.userInterfaceIdiom == .phone, !ActivityAuthorizationInfo().areActivitiesEnabled {
             error = L("Ayarlar > Uçuş > Canlı Etkinlikler'i aç.", "Turn on Settings > Uçuş > Live Activities.")
         }
         do {
