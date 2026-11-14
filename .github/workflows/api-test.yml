@@ -11,7 +11,7 @@ jobs:
         env:
           KEY: ${{ secrets.RAPIDAPI_KEY }}
         run: |
-          for q in TK829/2026-11-14; do
+          for q in TK619/2026-11-14 TK620/2026-11-14 TK620/2026-11-15; do
             curl -s -D h.txt -o o.json -w "http=%{http_code}\n" -H "x-rapidapi-key: $KEY" -H "x-rapidapi-host: aerodatabox.p.rapidapi.com" \
               "https://aerodatabox.p.rapidapi.com/flights/number/$q?withAircraftImage=false&withLocation=false"
             grep -i "ratelimit\|x-rapidapi" h.txt | grep -vi "key\|proxy-secret" | sed "s/^/HDR /"
