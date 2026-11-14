@@ -180,13 +180,16 @@ final class AirportStore: ObservableObject {
         Task { await CloudSync.save(n, type: "note", icao: n.icao) }
     }
     func add(_ r: HotelRating) {
+        var r = r
+        if let old = local.ratings.first(where: { $0.icao == r.icao && $0.author == r.author }) { r.id = old.id }
         local.ratings.removeAll { $0.icao == r.icao && $0.author == r.author }
         local.ratings.append(r); persist()
         Task { await CloudSync.save(r, type: "rating", icao: r.icao) }
     }
     func vote(_ note: AirportNote, valid: Bool) {
+        var v = NoteVote(icao: note.icao, noteID: note.id, valid: valid)
+        if let old = local.votes.first(where: { $0.noteID == note.id && $0.author == Identity.id }) { v.id = old.id }
         local.votes.removeAll { $0.noteID == note.id && $0.author == Identity.id }
-        let v = NoteVote(icao: note.icao, noteID: note.id, valid: valid)
         local.votes.append(v); persist()
         Task { await CloudSync.save(v, type: "vote", icao: v.icao) }
     }

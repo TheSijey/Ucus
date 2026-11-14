@@ -19,7 +19,11 @@ enum CloudSync {
         rec["icao"] = icao as CKRecordValue
         rec["type"] = type as CKRecordValue
         rec["payload"] = json as CKRecordValue
-        do { _ = try await db.save(rec) } catch {
+        do {
+            // Aynı kimlikli kayıt varsa (oy/puan değişikliği) üzerine yaz
+            let r = try await db.modifyRecords(saving: [rec], deleting: [], savePolicy: .allKeys)
+            if case .failure(let e)? = r.saveResults[rec.recordID] { throw e }
+        } catch {
             DebugLog.add("CloudKit kayıt hatası: \(error.localizedDescription)")
         }
     }
