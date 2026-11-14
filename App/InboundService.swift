@@ -275,7 +275,29 @@ enum AeroDataBox {
             return cached
         }
         try? result.0.write(to: file)
+        recordQuota(http)
         return flights
+    }
+
+    /// Cevap başlıklarındaki aylık kota: kalan / toplam unit.
+    private static func recordQuota(_ http: HTTPURLResponse) {
+        guard let rem = (http.value(forHTTPHeaderField: "x-ratelimit-api-units-remaining")).flatMap(Int.init),
+              let lim = (http.value(forHTTPHeaderField: "x-ratelimit-api-units-limit")).flatMap(Int.init) else { return }
+        let d = UserDefaults.standard
+        d.set(rem, forKey: "aeroUnitsRemaining")
+        d.set(lim, forKey: "aeroUnitsLimit")
+        d.set(Date(), forKey: "aeroUnitsAt")
+        if let reset = (http.value(forHTTPHeaderField: "x-ratelimit-api-units-reset")).flatMap(Double.init) {
+            d.set(Date().addingTimeInterval(reset), forKey: "aeroUnitsReset")
+        }
+        if rem < lim / 10 { DebugLog.add("AeroDataBox kotası azaldı: \(rem)/\(lim) unit kaldı") }
+    }
+
+    /// Son bilinen kota durumu.
+    static var quota: (remaining: Int, limit: Int, at: Date, reset: Date?)? {
+        let d = UserDefaults.standard
+        guard let at = d.object(forKey: "aeroUnitsAt") as? Date, d.object(forKey: "aeroUnitsLimit") != nil else { return nil }
+        return (d.integer(forKey: "aeroUnitsRemaining"), d.integer(forKey: "aeroUnitsLimit"), at, d.object(forKey: "aeroUnitsReset") as? Date)
     }
 
     /// Dış meydandan kalkan uçuş (CDM'de yok): bilgiler AeroDataBox'tan.

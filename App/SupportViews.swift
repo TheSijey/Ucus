@@ -144,6 +144,24 @@ struct SettingsView: View {
                 } footer: {
                     Text(L("Dış meydan kalkışlarında, girdiğin otelden çıkış saatinden bu kadar önce uçak sesli hatırlatma gelir.", "For outstation departures, a chime reminder arrives this long before the hotel pickup time you enter."))
                 }
+                if let q = AeroDataBox.quota {
+                    Section {
+                        VStack(alignment: .leading, spacing: 6) {
+                            LabeledContent(L("Kalan", "Remaining")) {
+                                Text("\(q.remaining.formatted()) / \(q.limit.formatted()) unit").monospacedDigit()
+                                    .foregroundStyle(q.remaining < q.limit / 10 ? Palette.warn : .primary)
+                            }
+                            ProgressView(value: Double(q.remaining), total: Double(max(q.limit, 1)))
+                                .tint(q.remaining < q.limit / 10 ? Palette.warn : Palette.stand)
+                        }
+                    } header: {
+                        Text(L("Uçuş verisi (AeroDataBox)", "Flight data (AeroDataBox)"))
+                    } footer: {
+                        Text(L("Son kontrol \(q.at.formatted(.dateTime.day().month().hour().minute()))", "Checked \(q.at.formatted(.dateTime.day().month().hour().minute()))")
+                             + (q.reset.map { L(" · yenilenme \($0.formatted(.dateTime.day().month(.abbreviated)))", " · resets \($0.formatted(.dateTime.day().month(.abbreviated)))") } ?? "")
+                             + L(" · bir sorgu ~2 unit", " · one query ~2 units"))
+                    }
+                }
                 Section {
                     NavigationLink(L("Nasıl kullanılır?", "How to use")) { HelpView() }
                     NavigationLink(L("Tanılama", "Diagnostics")) { DiagnosticsView() }
