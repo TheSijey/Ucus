@@ -175,6 +175,7 @@ struct AirportDetailView: View {
                 }
             }
         }
+        plainSummary(arr: arr)
         if !arr.isEmpty {
             Card {
                 VStack(alignment: .leading, spacing: 12) {
@@ -208,6 +209,50 @@ struct AirportDetailView: View {
                 }
             }
         }
+    }
+
+    /// "27R'ye ineceksin · 10 inişin 7'si" gibi düz cümleler.
+    @ViewBuilder
+    private func plainSummary(arr: [FlightRecord]) -> some View {
+        let windArr = currentWind.map { w in arr.filter { AirportStats.similarWind($0.windDir, w) } } ?? []
+        let base = windArr.count >= 3 ? windArr : arr
+        let rwy = AirportStats.distribution(base.map(\.runway), limit: 1).first
+        let appr = AirportStats.distribution(base.map(\.approach), limit: 1).first
+        let area = AirportStats.distribution(arr.map { AirportStats.standArea($0.stand) }, limit: 1).first
+        let apu = arr.sorted { $0.date > $1.date }.first { !$0.apu.isEmpty }?.apu
+            ?? store.notes(icao).filter { $0.kind == .apu }.max { $0.createdAt < $1.createdAt }?.text
+        let hot = store.notes(icao).filter { $0.kind == .hotspot }.max { $0.createdAt < $1.createdAt }
+        if rwy != nil || area != nil || apu != nil || hot != nil {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(windArr.count >= 3 ? L("Bugünkü rüzgârla büyük ihtimalle:", "With today's wind, most likely:") : L("Genelde:", "Usually:"))
+                    .font(.headline)
+                if let rwy {
+                    let n = base.filter { !$0.runway.isEmpty }.count
+                    sentence("airplane.arrival", Palette.signOn, L("\(rwy.value)'ye ineceksin", "You'll land on \(rwy.value)"),
+                             L("\(n) inişin \(rwy.count)'i", "\(rwy.count) of \(n) landings") + (appr.map { " · " + L("çoğu \($0.value)", "mostly \($0.value)") } ?? ""))
+                }
+                if let area {
+                    sentence("parkingsign", Palette.stand, L("\(area.value) bölgesinde park", "Parking in the \(area.value) area"),
+                             L("kayıtların %\(area.percent)'i", "%\(area.percent) of logs"))
+                }
+                if let apu { sentence("bolt.fill", Palette.outbound, "APU: \(apu)", nil) }
+                if let hot { sentence("exclamationmark.triangle.fill", Palette.warn, hot.text, L("Hotspot", "Hotspot")) }
+            }
+        }
+    }
+
+    private func sentence(_ icon: String, _ color: Color, _ title: String, _ sub: String?) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon).font(.title3).foregroundStyle(color)
+                .frame(width: 40, height: 40).background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.headline)
+                if let sub { Text(sub).font(.subheadline).foregroundStyle(Palette.secondary) }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     // MARK: Layover

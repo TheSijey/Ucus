@@ -2,12 +2,17 @@ import SwiftUI
 
 /// Tur: günün akışı yukarıdan aşağı.
 struct TourView: View {
+    var body: some View { NavigationStack { TourScreen() } }
+}
+
+/// Günün akışı (Bugün'den açılır).
+struct TourScreen: View {
     @EnvironmentObject var model: AppModel
     @ObservedObject var session = FlightSession.shared
     @AppStorage("tourShowsUTC") private var showUTC = false
 
     var body: some View {
-        NavigationStack {
+        Group {
             ScrollView {
                 if let s = session.state {
                     VStack(alignment: .leading, spacing: 0) {
@@ -32,7 +37,7 @@ struct TourView: View {
                 }
             }
             .background(Palette.bg)
-            .navigationTitle(L("Tur", "Trip"))
+            .navigationTitle(L("Günün akışı", "Today's schedule"))
             .toolbar { CommonToolbar() }
             .refreshable { await model.refresh() }
         }

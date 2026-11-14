@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Uygulamanın kökü: 5 sekme (Bugün · Tur · Brifing · Meydanlar · Uçuşlarım).
+/// Uygulamanın kökü: 5 sekme (Bugün · Brifing · Hava · Meydanlar · Uçuşlarım). Tur, Bugün içinde "Günün akışı".
 struct ContentView: View {
     @StateObject private var model = AppModel()
     @ObservedObject private var session = FlightSession.shared
@@ -13,12 +13,12 @@ struct ContentView: View {
             TodayView()
                 .tabItem { Label(L("Bugün", "Today"), systemImage: "rectangle.topthird.inset.filled") }
                 .tag(AppTab.today)
-            TourView()
-                .tabItem { Label(L("Tur", "Trip"), systemImage: "point.topleft.down.to.point.bottomright.curvepath") }
-                .tag(AppTab.tour)
             BriefingView()
                 .tabItem { Label(L("Brifing", "Briefing"), systemImage: "list.clipboard") }
                 .tag(AppTab.briefing)
+            WeatherView()
+                .tabItem { Label(L("Hava", "Weather"), systemImage: "cloud.sun") }
+                .tag(AppTab.weather)
             AirportsView()
                 .tabItem { Label(L("Meydanlar", "Airports"), systemImage: "mappin.and.ellipse") }
                 .tag(AppTab.airports)

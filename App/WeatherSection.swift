@@ -12,13 +12,11 @@ struct WeatherSection: View {
         if let s = session.state {
             let airports = FlightHelpers.airports(s)
             VStack(spacing: 12) {
-                if airports.count > 1 {
-                    Picker(L("Meydan", "Airport"), selection: Binding(get: { selected }, set: { selected = $0; pickedByUser = true })) {
-                        ForEach(airports, id: \.self) { icao in
-                            Text(label(icao, s)).tag(icao)
-                        }
+                // Meydan kartları: hangi meydanda sorun var, tek bakışta; dokununca o meydan seçilir
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: min(max(airports.count, 1), 2)), spacing: 10) {
+                    ForEach(airports, id: \.self) { icao in
+                        airportCard(icao, s, weather: items.first { $0.icao == icao })
                     }
-                    .pickerStyle(.segmented)
                 }
                 highlights
                 if let w = items.first(where: { $0.icao == selected }) {
@@ -47,6 +45,32 @@ struct WeatherSection: View {
                 loading = false
             }
         }
+    }
+
+    private func airportCard(_ icao: String, _ s: FlightAttributes.ContentState, weather w: AirportWeather?) -> some View {
+        let st = w.map(WeatherStatus.init)
+        let ev = (FlightHelpers.weatherEvents(s)[icao] ?? []).first
+        let on = selected == icao
+        let tint = st?.color ?? Palette.secondary
+        return Button { selected = icao; pickedByUser = true } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(WeatherStatus.city(icao, s) + (ev.map { " · \($0.label.lowercased(with: Lang.locale)) \(FlightHelpers.hm($0.time))" } ?? ""))
+                    .font(.caption.bold()).foregroundStyle(Palette.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                HStack(spacing: 6) {
+                    Image(systemName: st?.icon ?? "cloud").foregroundStyle(tint)
+                    Text(st.map { $0.isWarning ? L("Dikkat", "Caution") : L("Sorun yok", "Fine") } ?? "—").font(.title3.bold())
+                }
+                Text(st?.isWarning == true ? st!.short : (st?.detail ?? ""))
+                    .font(.footnote).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+            .background(st?.isWarning == true ? Palette.warn.opacity(0.12) : Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(on ? tint : Color.clear, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     private func label(_ icao: String, _ s: FlightAttributes.ContentState) -> String {
@@ -383,4 +407,26 @@ struct RunwayWindCard: View {
         .accessibilityLabel(L("Pist \(c.runway): \(c.head >= 0 ? "karşı" : "arka") \(abs(c.head)) knot, yan \(c.cross) knot \(c.crossFromLeft ? "soldan" : "sağdan")", "Runway \(c.runway): \(c.head >= 0 ? "headwind" : "tailwind") \(abs(c.head)) knots, crosswind \(c.cross) knots from the \(c.crossFromLeft ? "left" : "right")"))
     }
 
+}
+
+/// Hava sekmesi.
+struct WeatherView: View {
+    @EnvironmentObject var model: AppModel
+    @ObservedObject var session = FlightSession.shared
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                if session.state != nil {
+                    WeatherSection().padding(16)
+                } else {
+                    EmptyFlightView().padding(.top, 60)
+                }
+            }
+            .background(Palette.bg)
+            .navigationTitle(L("Hava", "Weather"))
+            .toolbar { CommonToolbar() }
+            .refreshable { await model.refresh() }
+        }
+    }
 }

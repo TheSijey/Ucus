@@ -39,10 +39,12 @@ struct OnboardingView: View {
             ("rectangle.split.3x1", .purple, L("Sekmeler", "Tabs"),
              [L("Bugün: stand, gate, pist, TOBT/TSAT/CTOT ve gelen uçak.",
                 "Today: stand, gate, runway, TOBT/TSAT/CTOT and the inbound aircraft."),
-              L("Tur: imzadan dönüş inişine kadar günün akışı.",
-                "Trip: the day from sign-on to the return landing."),
-              L("Brifing: kabin arızaları, el yazısı not, sunum modu; altında METAR, TAF ve pist rüzgârı.",
-                "Briefing: cabin defects, handwritten note, presentation mode; below it METAR, TAF and runway wind.")]),
+              L("Bugün'de \"Günün akışı\": imzadan dönüş inişine kadar adım adım. \"Şoföre göster\" standı tam ekran açar.",
+                "\"Today's schedule\" in Today: sign-on to return landing, step by step. \"Show driver\" opens the stand full screen."),
+              L("Brifing: kontrol listesi, NOTAM, kabin arızaları, DG, not ve sunum modu.",
+                "Briefing: checklist, NOTAMs, cabin defects, DG, note and presentation mode."),
+              L("Hava: meydan kartları, pist rüzgârı, METAR ve TAF.",
+                "Weather: airport cards, runway wind, METAR and TAF.")]),
             ("bell.badge", .orange, L("İzinler", "Permissions"),
              [L("Bildirime izin ver: çıkış saatinde uçak sesi çalar.",
                 "Allow notifications: an airplane chime plays when it's time to leave."),
@@ -198,8 +200,8 @@ struct HelpView: View {
                          "Crew notes only; they don't replace the AIP, Jeppesen or company procedures."))
             }
             Section(L("Hava", "Weather")) {
-                bullet(L("Brifing sekmesinin altında. İstanbul ve varış meydanı için METAR ve TAF. TAF'ta gidiş saatlerine denk gelen gruplar yeşil, dönüş saatlerine denk gelenler mavi işaretlenir.",
-                         "At the bottom of the Briefing tab. METAR and TAF for Istanbul and the destination. TAF groups covering the outbound times are marked green, those covering the return times blue."))
+                bullet(L("Hava sekmesinde. İstanbul ve varış meydanı için METAR ve TAF. TAF'ta gidiş saatlerine denk gelen gruplar yeşil, dönüş saatlerine denk gelenler mavi işaretlenir.",
+                         "In the Weather tab. METAR and TAF for Istanbul and the destination. TAF groups covering the outbound times are marked green, those covering the return times blue."))
                 bullet(L("Pist rüzgârı: yeşil ok karşı, kırmızı arka, turuncu yan rüzgâr; değerler okların yanında yazar. İstanbul'da CDM pisti (aktif), yoksa rüzgâra göre muhtemel pist; varışta son seferlerde inilen pist açılır. Alttaki pist kutucuklarıyla diğer pistlere geçebilirsin.",
                          "Runway wind: green arrow headwind, red tailwind, orange crosswind; values are shown next to the arrows. At Istanbul the CDM runway (active) opens, otherwise the likely runway by wind; at the destination, the runway used on recent flights. Use the runway chips to switch."))
             }
