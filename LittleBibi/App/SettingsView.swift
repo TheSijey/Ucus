@@ -57,6 +57,18 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Ayarlar")
+            .confirmationDialog("Paylaşım durdurulsun mu? Eşiniz yeni kayıtları göremez.", isPresented: $confirmStop, titleVisibility: .visible) {
+                Button("Paylaşımı durdur", role: .destructive) {
+                    Task { await cloud.stopSharing() }
+                }
+                Button("Vazgeç", role: .cancel) {}
+            }
+            .confirmationDialog("Aileden ayrılmak istiyor musunuz? Bu telefondaki kayıtlar silinmez.", isPresented: $confirmLeave, titleVisibility: .visible) {
+                Button("Ayrıl", role: .destructive) {
+                    Task { await cloud.leave() }
+                }
+                Button("Vazgeç", role: .cancel) {}
+            }
             .onAppear(perform: load)
             .onChange(of: babyName) { _, _ in commit() }
             .onChange(of: myName) { _, _ in commit() }
@@ -136,18 +148,6 @@ struct SettingsView: View {
             case .participant:
                 Text("Kayıtlar eşinizin iCloud'undaki aile alanında tutulur ve iki telefonda da görünür.")
             }
-        }
-        .confirmationDialog("Paylaşım durdurulsun mu? Eşiniz yeni kayıtları göremez.", isPresented: $confirmStop, titleVisibility: .visible) {
-            Button("Paylaşımı durdur", role: .destructive) {
-                Task { await cloud.stopSharing() }
-            }
-            Button("Vazgeç", role: .cancel) {}
-        }
-        .confirmationDialog("Aileden ayrılmak istiyor musunuz? Bu telefondaki kayıtlar silinmez.", isPresented: $confirmLeave, titleVisibility: .visible) {
-            Button("Ayrıl", role: .destructive) {
-                Task { await cloud.leave() }
-            }
-            Button("Vazgeç", role: .cancel) {}
         }
     }
 

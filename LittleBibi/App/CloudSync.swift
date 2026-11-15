@@ -364,14 +364,14 @@ final class CloudSync: ObservableObject {
             message = "iCloud saklama alanı dolu. Yer açılınca eşitleme devam eder."
         case .zoneNotFound, .userDeletedZone:
             if state.role == .participant {
-                state = State()
-                persist()
-                message = "Paylaşım sonlandırılmış. Kayıtlar bu telefonda duruyor; yeniden katılmak için yeni bir davet linki gerekir."
+                message = "Paylaşılan aile alanına ulaşılamadı. Yeni katıldıysanız birkaç saniye içinde düzelir; sürerse eşiniz paylaşımı durdurmuş olabilir."
             } else {
                 state.token = nil
                 persist()
-                message = "iCloud'daki aile alanı bulunamadı. \"Eşimle paylaş\" ile yeniden oluşturabilirsiniz."
+                message = "iCloud'daki aile alanı bulunamadı. \"Davet linki oluştur\" ile yeniden kurabilirsiniz."
             }
+        case .serverRejectedRequest:
+            message = "iCloud kaydı kabul etmedi. Veri yapısı (Item) henüz yayına alınmamış olabilir. Ayrıntı: \(ck.localizedDescription)"
         case .unknownItem:
             message = "iCloud veri yapısı henüz yayına alınmamış görünüyor (Item kaydı bulunamadı)."
         case .partialFailure:
