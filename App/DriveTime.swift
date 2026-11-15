@@ -3,6 +3,7 @@ import MapKit
 import SwiftUI
 
 /// Ev konumu: sadece bu telefonda saklanır; yol süresi için Apple Haritalar'a gider.
+@MainActor
 enum HomeLocation {
     private static let latKey = "homeLat", lonKey = "homeLon", labelKey = "homeLabel"
 
@@ -28,7 +29,7 @@ enum HomeLocation {
     }
 
     /// İstanbul Havalimanı
-    static let airport = CLLocationCoordinate2D(latitude: 41.2617, longitude: 28.7422)
+    nonisolated static let airport = CLLocationCoordinate2D(latitude: 41.2617, longitude: 28.7422)
 }
 
 /// Evden havalimanına sürüş süresi (o saatte beklenen trafikle).
