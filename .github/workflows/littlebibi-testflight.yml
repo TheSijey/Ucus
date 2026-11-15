@@ -80,7 +80,6 @@ jobs:
       - name: Elle imza hazırlığı
         if: ${{ inputs.upload || github.ref == 'refs/heads/main' || contains(github.event.head_commit.message, '[testflight]') }}
         run: |
-          export LB_DIAG=1
           python3 ci/sign.py "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" "$RUNNER_TEMP/sign"
           KC="$RUNNER_TEMP/build.keychain-db"
           PW=$(uuidgen)
