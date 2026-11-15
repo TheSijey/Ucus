@@ -134,6 +134,7 @@ struct SettingsView: View {
                 } footer: {
                     Text(L("Bu saate kadar Ada'da yeşil ev sayacı, sonra sarı imza sayacı görünür. O anda uçak sesli bildirim gelir. Değişiklik bir sonraki takip başlatmada geçerli olur.", "Until then the Dynamic Island shows a green leave-home countdown, then the yellow sign-on countdown. An alert with the chime sound arrives at that moment. Changes apply the next time you start tracking."))
                 }
+                HomeLocationSection(leaveMinutes: leaveMinutes)
                 Section {
                     Stepper(value: $hotelRemind, in: 0...60, step: 5) {
                         LabeledContent(L("Otel hatırlatması", "Hotel reminder")) {

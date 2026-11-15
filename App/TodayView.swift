@@ -80,6 +80,9 @@ struct TodayView: View {
             Countdown(target: target).font(.system(size: 52, weight: .heavy)).foregroundStyle(.white)
                 .lineLimit(1).minimumScaleFactor(0.6)
             Text(sub).font(.subheadline).foregroundStyle(.white.opacity(0.8))
+            if let leave, !s.isOutstation {
+                DriveInfoLine(departure: leave, signOn: s.signOn)
+            }
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -175,6 +175,10 @@ struct HelpView: View {
                 bullet(L("Sunum: brifingi büyük yazıyla tam ekran açar, ekibe göstermen için; ekran kapanmaz.",
                          "Present: opens the briefing full screen in large type to show the crew; the screen stays on."))
             }
+            Section(L("Yol süresi", "Drive time")) {
+                bullet(L("Ayarlar'da ev konumunu girersen, evden çıkış saatinde beklenen trafikle havalimanına yol süresi Bugün ekranında gösterilir (\"imzadan 8 dk önce varırsın\" gibi). Çıkış saatini yine sen ayarlarsın.",
+                         "If you set your home location in Settings, the expected drive time to the airport at your leave time is shown on Today (like \"you arrive 8 min before sign-on\"). You still choose the leave time."))
+            }
             Section("NOTAM") {
                 bullet(L("Brifing'de NOTAM kartından briefing PDF'ini içe aktar ya da metni yapıştır. PDF'i Dosyalar'dan veya paylaş menüsünden \"Uçuş\" ile açmak da olur.",
                          "Import the briefing PDF or paste the text from the NOTAM card in Briefing. You can also open the PDF with \"Uçuş\" from Files or the share menu."))
