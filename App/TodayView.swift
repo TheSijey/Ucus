@@ -6,7 +6,6 @@ struct TodayView: View {
     @ObservedObject var session = FlightSession.shared
     @State private var weather: [AirportWeather] = []
     @State private var editing: ManualField?
-    @State private var showDriver = false
     @State private var showTimesHelp = false
     @ObservedObject private var notams = NotamStore.shared
     @ObservedObject private var briefing = BriefingStore.shared
@@ -48,9 +47,6 @@ struct TodayView: View {
             .navigationTitle(L("Bugün", "Today"))
             .toolbar { CommonToolbar() }
             .refreshable { await model.refresh() }
-            .fullScreenCover(isPresented: $showDriver) {
-                if let s = session.state { DriverView(state: s) }
-            }
             .alert(L("Kalkış saatleri", "Departure times"), isPresented: $showTimesHelp) {
                 Button(L("Tamam", "OK"), role: .cancel) {}
             } message: {
@@ -91,7 +87,7 @@ struct TodayView: View {
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(color.opacity(0.3)))
     }
 
-    /// Stand büyük; "Şoföre göster" tam ekran açar.
+    /// Stand büyük.
     private func standCard(_ s: FlightAttributes.ContentState) -> some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
@@ -102,18 +98,6 @@ struct TodayView: View {
                     .font(.subheadline).foregroundStyle(.white.opacity(0.8))
             }
             Spacer()
-            Button { showDriver = true } label: {
-                VStack(spacing: 4) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right").font(.title3.bold())
-                    Text(L("Şoföre\ngöster", "Show\ndriver")).font(.caption.bold()).multilineTextAlignment(.center)
-                }
-                .frame(width: 86, height: 86)
-                .background(Palette.stand, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .foregroundStyle(.black)
-            }
-            .disabled(s.stand.isEmpty)
-            .opacity(s.stand.isEmpty ? 0.4 : 1)
-            .accessibilityLabel(L("Standı şoföre göster", "Show the stand to the driver"))
         }
         .padding(16)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -492,45 +476,5 @@ struct WeatherStatus {
         if icao == s.origin, let c = s.originCity, !c.isEmpty { return c }
         if let t = s.turn, t.destICAO == icao, !t.destCity.isEmpty { return t.destCity }
         return AirportDB.city(icao: icao) ?? icao
-    }
-}
-
-/// Şoföre göster: siyah zemin, dev stand; ekran kapanmaz, parlaklık artar.
-struct DriverView: View {
-    @Environment(\.dismiss) private var dismiss
-    let state: FlightAttributes.ContentState
-    @State private var oldBrightness: CGFloat = 0.5
-
-    var body: some View {
-        VStack(spacing: 18) {
-            HStack {
-                Spacer()
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark.circle.fill").font(.system(size: 36)).foregroundStyle(Color(white: 0.35))
-                }
-                .accessibilityLabel(L("Kapat", "Close"))
-            }
-            Spacer()
-            Text("STAND").font(.system(size: 28, weight: .bold)).tracking(2).foregroundStyle(Color(white: 0.8))
-            Text(Display.text(state.stand)).font(.system(size: 150, weight: .black)).foregroundStyle(Palette.stand)
-                .lineLimit(1).minimumScaleFactor(0.4)
-            Rectangle().fill(Color(white: 0.2)).frame(height: 2).padding(.horizontal, 40)
-            Text(Display.text(state.registration)).font(.system(size: 44, weight: .heavy)).foregroundStyle(.white)
-            Text("\(state.flight) · \(Display.text(state.destCode))").font(.title2).foregroundStyle(Color(white: 0.8))
-            Spacer()
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
-        .preferredColorScheme(.dark)
-        .onAppear {
-            UIApplication.shared.isIdleTimerDisabled = true
-            oldBrightness = UIScreen.main.brightness
-            UIScreen.main.brightness = 1
-        }
-        .onDisappear {
-            UIApplication.shared.isIdleTimerDisabled = false
-            UIScreen.main.brightness = oldBrightness
-        }
     }
 }
