@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct LittleBibiApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = Store()
 
     var body: some Scene {
@@ -19,6 +20,7 @@ struct RootView: View {
     @EnvironmentObject private var store: Store
     @State private var showNursing = false
     @State private var showOnboarding = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView {
@@ -38,6 +40,14 @@ struct RootView: View {
         }
         .onAppear {
             if !store.profile.onboarded { showOnboarding = true }
+        }
+        .task(id: scenePhase) {
+            // Uygulama açıkken aile kayıtlarını düzenli olarak eşitle.
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                await CloudSync.shared.sync()
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+            }
         }
         .onOpenURL { url in
             if url.host == "nursing", store.profile.onboarded { showNursing = true }

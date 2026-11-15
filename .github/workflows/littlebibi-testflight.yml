@@ -91,3 +91,5 @@ jobs:
             -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          echo "--- imzalanan yetkiler ---"
+          grep -A6 -i "icloud" "$RUNNER_TEMP/export/DistributionSummary.plist" | head -40 || true

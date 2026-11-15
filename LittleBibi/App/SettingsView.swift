@@ -8,6 +8,10 @@ struct SettingsView: View {
     @State private var birthDate = Date()
     @State private var loaded = false
     @State private var exportURL: URL?
+    @ObservedObject private var cloud = CloudSync.shared
+    @State private var inviteLink = ""
+    @State private var confirmStop = false
+    @State private var confirmLeave = false
 
     var body: some View {
         NavigationStack {
@@ -26,6 +30,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("Bu ad, girdiğiniz kayıtların yanında görünür.")
                 }
+                familySection
                 Section {
                     if let exportURL {
                         ShareLink(item: exportURL) {
@@ -42,7 +47,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Veriler")
                 } footer: {
-                    Text("Kayıtlar yalnızca bu telefonda saklanır. Eşinizle iCloud üzerinden paylaşım bir sonraki sürümde gelecek.")
+                    Text("Dışa aktarılan dosya Excel ve Numbers ile açılır.")
                 }
                 Section("Hakkında") {
                     LabeledContent("Sürüm", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
@@ -57,6 +62,105 @@ struct SettingsView: View {
             .onChange(of: myName) { _, _ in commit() }
             .onChange(of: born) { _, _ in commit() }
             .onChange(of: birthDate) { _, _ in commit() }
+        }
+    }
+
+    @ViewBuilder
+    private var familySection: some View {
+        Section {
+            switch cloud.state.role {
+            case .none:
+                Button {
+                    Task { await cloud.startSharing() }
+                } label: {
+                    Label("Eşimle paylaş", systemImage: "person.2.fill")
+                }
+                .disabled(cloud.busy)
+                TextField("Davet linkini buraya yapıştırın", text: $inviteLink)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                Button {
+                    let link = inviteLink
+                    Task {
+                        await cloud.join(link: link)
+                        if cloud.state.role == .participant { inviteLink = "" }
+                    }
+                } label: {
+                    Label("Davet linkiyle katıl", systemImage: "link")
+                }
+                .disabled(cloud.busy || inviteLink.trimmingCharacters(in: .whitespaces).isEmpty)
+            case .owner:
+                LabeledContent("Durum", value: cloud.state.shareURL == nil ? "iCloud'a yedekleniyor" : "Paylaşım açık")
+                if let link = cloud.state.shareURL, let url = URL(string: link) {
+                    ShareLink(item: url, message: Text("LittleBibi'de bebeğimizin kayıtlarını birlikte tutalım. Önce uygulamayı kur, sonra bu linke dokun.")) {
+                        Label("Davet linkini gönder", systemImage: "square.and.arrow.up")
+                    }
+                    Button("Paylaşımı durdur", role: .destructive) { confirmStop = true }
+                        .disabled(cloud.busy)
+                } else {
+                    Button {
+                        Task { await cloud.startSharing() }
+                    } label: {
+                        Label("Davet linki oluştur", systemImage: "person.2.fill")
+                    }
+                    .disabled(cloud.busy)
+                }
+                syncRows
+            case .participant:
+                LabeledContent("Durum", value: "Aileye bağlı")
+                syncRows
+                Button("Aileden ayrıl", role: .destructive) { confirmLeave = true }
+                    .disabled(cloud.busy)
+            }
+            if cloud.busy {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("iCloud ile konuşuluyor…")
+                        .foregroundStyle(Theme.muted)
+                }
+            }
+            if let message = cloud.message {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(Theme.noteInk)
+            }
+        } header: {
+            Text("Aile paylaşımı")
+        } footer: {
+            switch cloud.state.role {
+            case .none:
+                Text("Biriniz \"Eşimle paylaş\"a basıp linki gönderir; diğeri linke dokunur ya da buraya yapıştırır. İkinizin kayıtları birleşir.")
+            case .owner:
+                Text("Linki alan herkes kayıtları görebilir ve değiştirebilir; yalnızca ailenizle paylaşın. Devam eden emzirme sayacı paylaşılmaz, biten emzirme paylaşılır.")
+            case .participant:
+                Text("Kayıtlar eşinizin iCloud'undaki aile alanında tutulur ve iki telefonda da görünür.")
+            }
+        }
+        .confirmationDialog("Paylaşım durdurulsun mu? Eşiniz yeni kayıtları göremez.", isPresented: $confirmStop, titleVisibility: .visible) {
+            Button("Paylaşımı durdur", role: .destructive) {
+                Task { await cloud.stopSharing() }
+            }
+            Button("Vazgeç", role: .cancel) {}
+        }
+        .confirmationDialog("Aileden ayrılmak istiyor musunuz? Bu telefondaki kayıtlar silinmez.", isPresented: $confirmLeave, titleVisibility: .visible) {
+            Button("Ayrıl", role: .destructive) {
+                Task { await cloud.leave() }
+            }
+            Button("Vazgeç", role: .cancel) {}
+        }
+    }
+
+    @ViewBuilder
+    private var syncRows: some View {
+        LabeledContent("Son eşitleme", value: cloud.state.lastSync.map { Fmt.day($0) + " " + Fmt.time($0) } ?? "Henüz yok")
+        if !cloud.state.dirty.isEmpty {
+            LabeledContent("Gönderilmeyi bekleyen", value: "\(cloud.state.dirty.count) kayıt")
+        }
+        Button {
+            Task { await cloud.sync() }
+        } label: {
+            Label("Şimdi eşitle", systemImage: "arrow.triangle.2.circlepath")
         }
     }
 

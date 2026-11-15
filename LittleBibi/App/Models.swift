@@ -107,6 +107,15 @@ struct Profile: Codable, Equatable {
     var birthDate: Date? = nil
     var myName: String = ""
     var onboarded: Bool = false
+    /// Bebek bilgilerinin son değiştiği an; aile eşitlemesinde hangisinin yeni olduğunu belirler.
+    var babyModified: Date? = nil
+}
+
+/// Profilin aileyle paylaşılan kısmı.
+struct SharedProfile: Codable {
+    var babyName: String
+    var birthDate: Date?
+    var modified: Date
 }
 
 /// Devam eden emzirme. Uygulama kapansa da kaybolmaması için diske yazılır.
