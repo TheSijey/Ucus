@@ -67,6 +67,14 @@ jobs:
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             CODE_SIGNING_ALLOWED=NO
 
+      # İmzasız arşive yetkileri (iCloud) geçici imzayla ekle; asıl imzayı dışa aktarma atar.
+      - name: Yetkileri ekle
+        run: |
+          APP="$RUNNER_TEMP/LittleBibi.xcarchive/Products/Applications/LittleBibi.app"
+          codesign --force --sign - "$APP/PlugIns/LittleBibiWidget.appex"
+          codesign --force --sign - --entitlements App/LittleBibi.entitlements "$APP"
+          codesign -d --entitlements - "$APP" 2>/dev/null | grep -A3 -i icloud || true
+
       - name: İmzala ve TestFlight'a yükle
         if: ${{ inputs.upload || github.ref == 'refs/heads/main' || contains(github.event.head_commit.message, '[testflight]') }}
         run: |
@@ -91,5 +99,3 @@ jobs:
             -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
-          echo "--- imzalanan yetkiler ---"
-          grep -A6 -i "icloud" "$RUNNER_TEMP/export/DistributionSummary.plist" | head -40 || true
