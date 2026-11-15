@@ -56,9 +56,13 @@ struct ContentView: View {
         .onOpenURL { url in
             if url.isFileURL {
                 // Dosyalar / paylaş menüsünden açılan briefing PDF'i: takip edilen uçuşun NOTAM'larına aktarılır
-                if let s = session.state, let text = NotamParser.pdfText(url), !text.isEmpty {
+                let text = NotamParser.pdfText(url)
+                NotamStore.removeCopy(url)   // iOS'un uygulamaya koyduğu kopya okununca silinir
+                if let s = session.state, let text, !text.isEmpty {
                     NotamStore.shared.importText(text, source: url.lastPathComponent, key: BriefingStore.key(for: s))
                     model.tab = .briefing
+                } else if session.state == nil {
+                    model.error = L("NOTAM'ları aktarmak için önce uçuşu başlat.", "Start the flight first to import NOTAMs.")
                 }
                 return
             }
@@ -78,6 +82,7 @@ struct ContentView: View {
             }
         }
         .task {
+            NotamStore.purgeInbox()
             model.store.prune()
             ActivityObserver.watchAll()
             if session.state == nil { model.tab = .flights }

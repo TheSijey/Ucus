@@ -264,6 +264,22 @@ final class NotamStore: ObservableObject {
         return list.count
     }
 
+    /// Paylaş menüsünden açılan dosyanın uygulama içindeki kopyasını siler (sadece kendi klasörümüzdekini).
+    nonisolated static func removeCopy(_ url: URL) {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].standardizedFileURL.path
+        let tmp = FileManager.default.temporaryDirectory.standardizedFileURL.path
+        let path = url.standardizedFileURL.path
+        guard path.hasPrefix(docs) || path.hasPrefix(tmp) else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    /// Önceki sürümlerden kalan kopyaları temizler (Documents/Inbox).
+    nonisolated static func purgeInbox() {
+        let inbox = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Inbox")
+        guard let items = try? FileManager.default.contentsOfDirectory(at: inbox, includingPropertiesForKeys: nil) else { return }
+        items.forEach { try? FileManager.default.removeItem(at: $0) }
+    }
+
     func remove(_ key: String) {
         packages[key] = nil
         persist()
