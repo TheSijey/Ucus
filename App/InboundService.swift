@@ -205,8 +205,7 @@ enum AeroDataBox {
         return all
     }
 
-    /// Kota dolunca (HTTP 429) bir süre hiç sorgu yapılmaz.
-    /// Kota dolunca (HTTP 429) 30 dk sorgu yapılmaz. Eski sürümün 6 saatlik beklemesi geçersiz sayılır.
+    /// Aylık kota dolunca (HTTP 429 + kota mesajı) 30 dk sorgu yapılmaz. Eski sürümün 6 saatlik beklemesi geçersiz sayılır.
     static var quotaBlocked: Bool {
         guard let until = UserDefaults.standard.object(forKey: "aeroBlockedUntil") as? Date else { return false }
         let left = until.timeIntervalSinceNow
@@ -255,29 +254,58 @@ enum AeroDataBox {
         req.setValue(key, forHTTPHeaderField: "x-rapidapi-key")
         req.setValue("aerodatabox.p.rapidapi.com", forHTTPHeaderField: "x-rapidapi-host")
         req.timeoutInterval = 15
-        guard let result = try? await URLSession.shared.data(for: req),
-              let http = result.1 as? HTTPURLResponse else {
-            DebugLog.add("AeroDataBox \(path): bağlantı hatası")
-            return cached
+        var attempt = 0
+        while true {
+            attempt += 1
+            await throttle.wait()   // planın saniyelik sınırı aşılmasın: istekler arka arkaya, aralıklı gider
+            guard let result = try? await URLSession.shared.data(for: req),
+                  let http = result.1 as? HTTPURLResponse else {
+                DebugLog.add("AeroDataBox \(path): bağlantı hatası")
+                return cached
+            }
+            if http.statusCode == 204 {
+                try? Data("[]".utf8).write(to: file)
+                return []
+            }
+            if http.statusCode == 429 {
+                let body = (String(data: result.0.prefix(300), encoding: .utf8) ?? "").lowercased()
+                let remaining = http.value(forHTTPHeaderField: "x-ratelimit-api-units-remaining").flatMap(Int.init)
+                let monthly = remaining == 0 || body.contains("monthly") || body.contains("quota")
+                if monthly {
+                    UserDefaults.standard.set(Date().addingTimeInterval(30 * 60), forKey: "aeroBlockedUntil")
+                    DebugLog.add("AeroDataBox aylık kotası doldu (429); 30 dk sorgu yapılmayacak")
+                    return cached
+                }
+                // Saniyelik sınır: kota dolmadı, biraz bekleyip tekrar dene
+                DebugLog.add("AeroDataBox saniyelik sınır (429), deneme \(attempt)")
+                if attempt >= 4 { return cached }
+                try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_500_000_000)
+                continue
+            }
+            guard http.statusCode == 200, let flights = decode(result.0) else {
+                let body = String(data: result.0.prefix(120), encoding: .utf8) ?? ""
+                DebugLog.add("AeroDataBox \(path): HTTP \(http.statusCode) \(body)")
+                return cached
+            }
+            try? result.0.write(to: file)
+            recordQuota(http)
+            return flights
         }
-        if http.statusCode == 204 {
-            try? Data("[]".utf8).write(to: file)
-            return []
-        }
-        if http.statusCode == 429 {
-            UserDefaults.standard.set(Date().addingTimeInterval(30 * 60), forKey: "aeroBlockedUntil")
-            DebugLog.add("AeroDataBox kotası doldu (429); 30 dk sorgu yapılmayacak")
-            return cached
-        }
-        guard http.statusCode == 200, let flights = decode(result.0) else {
-            let body = String(data: result.0.prefix(120), encoding: .utf8) ?? ""
-            DebugLog.add("AeroDataBox \(path): HTTP \(http.statusCode) \(body)")
-            return cached
-        }
-        try? result.0.write(to: file)
-        recordQuota(http)
-        return flights
     }
+
+    /// İstekleri en az 1,1 sn arayla sıraya koyar (RapidAPI planlarında saniyelik istek sınırı var).
+    private actor Throttle {
+        private var next = Date.distantPast
+        func wait() async {
+            let now = Date()
+            let at = max(now, next)
+            next = at.addingTimeInterval(1.1)
+            let gap = at.timeIntervalSince(now)
+            if gap > 0 { try? await Task.sleep(nanoseconds: UInt64(gap * 1_000_000_000)) }
+        }
+    }
+    private static let throttle = Throttle()
+
 
     /// Cevap başlıklarındaki aylık kota: kalan / toplam unit.
     private static func recordQuota(_ http: HTTPURLResponse) {
