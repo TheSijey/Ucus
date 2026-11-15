@@ -105,5 +105,6 @@ jobs:
         run: |
           for d in $(find "$RUNNER_TEMP" /var/folders -name "*.xcdistributionlogs" 2>/dev/null); do
             echo "== $d"; ls "$d"
-            grep -h -i -E "error|fail|denied|forbidden|unauthor|cloud|container|capabilit|entitlement|40[0-9]" "$d"/IDEDistribution.standard.log | cut -c1-600 | tail -80
+            tail -60 "$d"/IDEDistribution.critical.log | cut -c1-700
+            echo "-- provisioning"; tail -150 "$d"/IDEDistributionProvisioning.log | cut -c1-900
           done
