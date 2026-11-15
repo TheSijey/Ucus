@@ -99,3 +99,11 @@ jobs:
             -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Dışa aktarma günlüğü (hata olursa)
+        if: failure()
+        run: |
+          for d in $(find "$RUNNER_TEMP" /var/folders -name "*.xcdistributionlogs" 2>/dev/null); do
+            echo "== $d"; ls "$d"
+            grep -h -i -E "error|fail|denied|forbidden|unauthor|cloud|container|capabilit|entitlement|40[0-9]" "$d"/IDEDistribution.standard.log | cut -c1-600 | tail -80
+          done
