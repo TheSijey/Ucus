@@ -150,7 +150,24 @@ def main():
 
     # 1) Sertifika
     cert = None
-    for c in api("GET", "/v1/certificates" + q({"filter[certificateType]": "DISTRIBUTION", "limit": 200})).get("data", []):
+    listed = api("GET", "/v1/certificates" + q({"limit": 200})).get("data", [])
+    mine = hashlib.sha256(str(n).encode()).hexdigest()[:8]
+    print("Anahtar parmak izi:", mine, "| listelenen sertifika:", len(listed))
+    for c in listed:
+        a = c["attributes"]
+        m = modulus_of_cert(base64.b64decode(a["certificateContent"]))
+        print("  -", a.get("certificateType"), a.get("name"), a.get("expirationDate", "")[:10],
+              hashlib.sha256(str(m).encode()).hexdigest()[:8])
+    if os.environ.get("LB_DIAG"):
+        for identifier, _ in TARGETS[:1]:
+            b = [x for x in api("GET", "/v1/bundleIds" + q({"filter[identifier]": identifier})).get("data", []) if x["attributes"]["identifier"] == identifier][0]
+            caps = api("GET", "/v1/bundleIds/" + b["id"] + "/bundleIdCapabilities")
+            for cap in caps.get("data", []):
+                print("  yetenek:", cap["attributes"].get("capabilityType"), json.dumps(cap["attributes"].get("settings"))[:600])
+        sys.exit("Tanılama bitti, değişiklik yapılmadı.")
+    for c in listed:
+        if c["attributes"].get("certificateType") not in ("DISTRIBUTION", "IOS_DISTRIBUTION"):
+            continue
         der = base64.b64decode(c["attributes"]["certificateContent"])
         if modulus_of_cert(der) == n:
             exp = c["attributes"].get("expirationDate", "")
