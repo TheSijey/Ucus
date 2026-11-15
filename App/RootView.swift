@@ -59,7 +59,7 @@ struct ContentView: View {
                 let text = NotamParser.pdfText(url)
                 NotamStore.removeCopy(url)   // iOS'un uygulamaya koyduğu kopya okununca silinir
                 if let s = session.state, let text, !text.isEmpty {
-                    NotamStore.shared.importText(text, source: url.lastPathComponent, key: BriefingStore.key(for: s))
+                    NotamStore.shared.importText(text, source: url.lastPathComponent, key: BriefingStore.key(for: s), airports: FlightHelpers.airports(s))
                     model.tab = .briefing
                 } else if session.state == nil {
                     model.error = L("NOTAM'ları aktarmak için önce uçuşu başlat.", "Start the flight first to import NOTAMs.")

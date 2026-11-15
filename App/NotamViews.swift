@@ -37,6 +37,7 @@ struct NotamCard: View {
                             Tile(title: lv.title, value: "\(c)", color: c > 0 ? lv.color : .primary)
                         }
                     }
+                    Text(groupCounts(pkg, relevant)).font(.caption).foregroundStyle(Palette.secondary)
                     ForEach(critical.prefix(4)) { NotamRow(notam: $0, compact: true) }
                     NavigationLink {
                         NotamListView(key: key, state: state)
@@ -65,7 +66,7 @@ struct NotamCard: View {
         }
         .sheet(isPresented: $pasting) {
             PasteNotamSheet { text in
-                let n = store.importText(text, source: L("Yapıştırılan metin", "Pasted text"), key: key)
+                let n = store.importText(text, source: L("Yapıştırılan metin", "Pasted text"), key: key, airports: FlightHelpers.airports(state))
                 message = n == 0 ? L("Metinde NOTAM bulunamadı.", "No NOTAMs found in the text.") : nil
             }
         }
@@ -74,12 +75,22 @@ struct NotamCard: View {
         }
     }
 
+    private func groupCounts(_ pkg: NotamPackage, _ relevant: [Notam]) -> String {
+        let alts = pkg.alternates ?? []
+        let origin = FlightHelpers.airports(state).first ?? "LTFM"
+        let dest = FlightHelpers.destICAO(state)
+        return NotamGroup.allCases.compactMap { g -> String? in
+            let c = relevant.filter { NotamGroup.of($0, origin: origin, dest: dest, alternates: alts) == g }.count
+            return c == 0 ? nil : "\(g.title) \(c)"
+        }.joined(separator: " · ")
+    }
+
     private func load(_ url: URL) {
         guard let text = NotamParser.pdfText(url), !text.isEmpty else {
             message = L("Dosya okunamadı.", "Couldn't read the file.")
             return
         }
-        let n = store.importText(text, source: url.lastPathComponent, key: key)
+        let n = store.importText(text, source: url.lastPathComponent, key: key, airports: FlightHelpers.airports(state))
         message = n == 0 ? L("Dosyada NOTAM bulunamadı (A1234/26 biçiminde kimlik aranıyor).", "No NOTAMs found (looking for IDs like A1234/26).") : nil
     }
 }
@@ -148,27 +159,51 @@ struct NotamListView: View {
     let state: FlightAttributes.ContentState
     @ObservedObject var store = NotamStore.shared
     @State private var showInactive = false
+    @State private var group: NotamGroup = .departure
+    @State private var editingAlts = false
+    @State private var altText = ""
 
     var body: some View {
-        let all = store.packages[key]?.notams ?? []
+        let pkg = store.packages[key]
+        let all = pkg?.notams ?? []
+        let alts = pkg?.alternates ?? []
+        let origin = FlightHelpers.airports(state).first ?? "LTFM"
+        let dest = FlightHelpers.destICAO(state)
         let relevant = NotamFilter.relevant(all, state)
-        let inactive = all.filter { n in !relevant.contains { $0.id == n.id } }
-        let airports = FlightHelpers.airports(state)
+        let inGroup: ([Notam]) -> [Notam] = { list in list.filter { NotamGroup.of($0, origin: origin, dest: dest, alternates: alts) == group } }
+        let items = inGroup(relevant)
+        let inactive = inGroup(all.filter { n in !relevant.contains { $0.id == n.id } })
         List {
+            Section {
+                Picker("", selection: $group) {
+                    ForEach(NotamGroup.allCases) { g in
+                        let c = relevant.filter { NotamGroup.of($0, origin: origin, dest: dest, alternates: alts) == g }.count
+                        Text(c > 0 ? "\(g.shortTitle) \(c)" : g.shortTitle).tag(g)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text(groupSubtitle(origin: origin, dest: dest, alts: alts)).font(.footnote).foregroundStyle(Palette.secondary)
+                if group == .alternate {
+                    Button(alts.isEmpty ? L("Yedek meydan ekle", "Add alternates") : L("Yedek meydanları düzenle", "Edit alternates")) {
+                        altText = alts.joined(separator: " ")
+                        editingAlts = true
+                    }
+                }
+            }
             if !NotamAI.isAvailable {
                 Section {
                     Text(L("Bu cihazda Apple Intelligence yok ya da kapalı; NOTAM'lar kısaltmaları açılmış hâlde gösteriliyor.", "Apple Intelligence isn't available on this device; NOTAMs are shown with abbreviations expanded."))
                         .font(.footnote).foregroundStyle(Palette.secondary)
                 }
             }
+            if items.isEmpty {
+                Section { Text(L("Bu grupta uçuş saatinde geçerli NOTAM yok.", "No NOTAMs valid at flight time in this group.")).foregroundStyle(Palette.secondary) }
+            }
             ForEach(Notam.Level.allCases, id: \.self) { lv in
-                let items = relevant.filter { $0.level == lv }.sorted { a, b in
-                    let ia = airports.firstIndex(of: a.location) ?? 99, ib = airports.firstIndex(of: b.location) ?? 99
-                    return ia == ib ? a.id < b.id : ia < ib
-                }
-                if !items.isEmpty {
-                    Section(lv.title + " · \(items.count)") {
-                        ForEach(items) { NotamRow(notam: $0) }
+                let list = items.filter { $0.level == lv }.sorted { $0.location == $1.location ? $0.id < $1.id : $0.location < $1.location }
+                if !list.isEmpty {
+                    Section(lv.title + " · \(list.count)") {
+                        ForEach(list) { NotamRow(notam: $0) }
                     }
                 }
             }
@@ -188,6 +223,25 @@ struct NotamListView: View {
         .background(Palette.bg)
         .navigationTitle("NOTAM")
         .refreshable { await store.summarizeImportant(key) }
+        .alert(L("Yedek meydanlar", "Alternates"), isPresented: $editingAlts) {
+            TextField("EGSS EGKK", text: $altText).textInputAutocapitalization(.characters)
+            Button(L("Kaydet", "Save")) {
+                let list = altText.uppercased().split(whereSeparator: { !$0.isLetter }).map(String.init).filter { $0.count == 4 }
+                store.setAlternates(key, list)
+            }
+            Button(L("Vazgeç", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L("ICAO kodlarını boşlukla ayırarak yaz.", "Type ICAO codes separated by spaces."))
+        }
+    }
+
+    private func groupSubtitle(origin: String, dest: String?, alts: [String]) -> String {
+        switch group {
+        case .departure: return origin
+        case .destination: return dest ?? "—"
+        case .alternate: return alts.isEmpty ? L("Briefing'de yedek meydan bulunamadı; elle ekleyebilirsin.", "No alternates found in the briefing; you can add them.") : alts.joined(separator: " · ")
+        case .enroute: return L("Diğer meydanlar ve FIR NOTAM'ları", "Other airports and FIR NOTAMs")
+        }
     }
 }
 

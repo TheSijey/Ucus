@@ -45,6 +45,37 @@ struct NotamPackage: Codable {
     var importedAt = Date()
     var source: String
     var notams: [Notam]
+    var alternates: [String]? = nil   // yedek meydanlar (briefing'den bulunan ya da elle girilen)
+}
+
+/// NOTAM'ın uçuştaki yeri.
+enum NotamGroup: Int, CaseIterable, Identifiable {
+    case departure, destination, alternate, enroute
+    var id: Int { rawValue }
+    var title: String {
+        switch self {
+        case .departure: L("Kalkış", "Departure")
+        case .destination: L("Varış", "Destination")
+        case .alternate: L("Yedek", "Alternate")
+        case .enroute: L("Yol / FIR", "En route / FIR")
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .departure: L("Kalkış", "Dep")
+        case .destination: L("Varış", "Dest")
+        case .alternate: L("Yedek", "Altn")
+        case .enroute: L("Yol", "Enrt")
+        }
+    }
+
+    static func of(_ n: Notam, origin: String, dest: String?, alternates: [String]) -> NotamGroup {
+        if n.location == origin { return .departure }
+        if let dest, n.location == dest { return .destination }
+        if alternates.contains(n.location) { return .alternate }
+        return .enroute
+    }
 }
 
 // MARK: - Ayrıştırma
@@ -118,6 +149,23 @@ enum NotamParser {
               let m = re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)),
               m.numberOfRanges > 1, let r = Range(m.range(at: 1), in: s) else { return nil }
         return String(s[r])
+    }
+
+    /// Briefing metnindeki yedek meydanlar: "ALTN EGSS", "ALTN: EGSS/EGKK", "ALTERNATE EGSS" ...
+    static func alternates(in text: String, excluding: [String]) -> [String] {
+        guard let re = try? NSRegularExpression(pattern: #"\b(?:ALTN|ALTERNATES?|DEST ALTN|ERA|TO ALTN)\b[\s:/-]*((?:[A-Z]{4}\b[\s,/]*){1,4})"#) else { return [] }
+        let ns = text as NSString
+        let stop: Set<String> = ["ALTN", "NONE", "TEMP", "FROM", "TAKE", "FUEL", "TIME", "DIST", "PLAN", "WIND", "ROUTE"]
+        var out: [String] = []
+        for m in re.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            let chunk = ns.substring(with: m.range(at: 1))
+            for code in chunk.split(whereSeparator: { !$0.isLetter }).map(String.init) where code.count == 4 {
+                if !excluding.contains(code), !out.contains(code), !stop.contains(code) {
+                    out.append(code)
+                }
+            }
+        }
+        return Array(out.prefix(4))
     }
 
     /// "2611140600" → 14 Kasım 2026 06:00 UTC
@@ -256,9 +304,11 @@ final class NotamStore: ObservableObject {
 
     /// Metni ayrıştırıp uçuşa bağlar; NOTAM sayısını döndürür.
     @discardableResult
-    func importText(_ text: String, source: String, key: String) -> Int {
+    func importText(_ text: String, source: String, key: String, airports: [String] = []) -> Int {
         let list = NotamParser.parse(text)
-        packages[key] = NotamPackage(source: source, notams: list)
+        // Briefing metninde (OFP) yedek meydan ara
+        let alts = NotamParser.alternates(in: text, excluding: airports)
+        packages[key] = NotamPackage(source: source, notams: list, alternates: alts.isEmpty ? nil : alts)
         persist()
         Task { await summarizeImportant(key) }
         return list.count
@@ -278,6 +328,13 @@ final class NotamStore: ObservableObject {
         let inbox = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Inbox")
         guard let items = try? FileManager.default.contentsOfDirectory(at: inbox, includingPropertiesForKeys: nil) else { return }
         items.forEach { try? FileManager.default.removeItem(at: $0) }
+    }
+
+    func setAlternates(_ key: String, _ list: [String]) {
+        guard var p = packages[key] else { return }
+        p.alternates = list.isEmpty ? nil : list
+        packages[key] = p
+        persist()
     }
 
     func remove(_ key: String) {
