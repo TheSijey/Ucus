@@ -8,7 +8,7 @@ bulut imzası iCloud yetkili uygulamada çalışmıyor. Bu betik aynı API anaht
   3. anahtar, sertifika ve profilleri imzalama adımının kullanacağı yerlere yazar.
 
 Sertifikanın özel anahtarı hiçbir yerde saklanmaz; her çalıştırmada mevcut API
-anahtarından aynı şekilde türetilir. Yalnızca Python standart kitaplığı ve openssl kullanır.
+anahtarından aynı şekilde türetilir; sertifika yılda bir kez yenilenir. Yalnızca Python standart kitaplığı ve openssl kullanır.
 """
 import base64, hashlib, json, os, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
 
