@@ -15,12 +15,23 @@ final class FlightSession: ObservableObject {
 
     @Published private(set) var query: String = ""
     @Published private(set) var state: FlightAttributes.ContentState?
+    /// Biten son uçuş: tur bittikten sonra da 24 saat kayıt/not eklenebilsin diye.
+    @Published private(set) var last: FlightAttributes.ContentState?
+    private let lastKey = "lastFlight", lastAtKey = "lastFlightAt"
+
+    /// Takip edilen uçuş, yoksa son 24 saatte biten uçuş.
+    var recent: FlightAttributes.ContentState? { state ?? last }
 
     private init() {
         if let data = UserDefaults.standard.data(forKey: key),
            let s = try? JSONDecoder().decode(Stored.self, from: data) {
             query = s.query
             state = s.state
+        }
+        if let at = UserDefaults.standard.object(forKey: lastAtKey) as? Date, Date().timeIntervalSince(at) < 86_400,
+           let d = UserDefaults.standard.data(forKey: lastKey),
+           let s = try? JSONDecoder().decode(FlightAttributes.ContentState.self, from: d) {
+            last = s
         }
         expireIfNeeded()
     }
@@ -34,6 +45,11 @@ final class FlightSession: ObservableObject {
     }
 
     func clear() {
+        if let s = state, let d = try? JSONEncoder().encode(s) {
+            UserDefaults.standard.set(d, forKey: lastKey)
+            UserDefaults.standard.set(Date(), forKey: lastAtKey)
+            last = s
+        }
         query = ""
         state = nil
         UserDefaults.standard.removeObject(forKey: key)

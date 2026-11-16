@@ -80,8 +80,12 @@ struct TodayView: View {
             Countdown(target: target).font(.system(size: 52, weight: .heavy)).foregroundStyle(.white)
                 .lineLimit(1).minimumScaleFactor(0.6)
             Text(sub).font(.subheadline).foregroundStyle(.white.opacity(0.8))
-            if let leave, !s.isOutstation {
-                DriveInfoLine(departure: leave, signOn: s.signOn)
+            if !s.isOutstation {
+                if let leave {
+                    DriveInfoLine(departure: leave, signOn: s.signOn)
+                } else if Date() < s.signOn {
+                    DriveInfoLine(departure: Date(), signOn: s.signOn, prefix: L("Şimdi çıkarsan", "Leaving now"))
+                }
             }
         }
         .padding(18)

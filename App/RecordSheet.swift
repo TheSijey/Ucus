@@ -6,9 +6,9 @@ struct RecordRequest: Identifiable {
     var record: FlightRecord
     var autoFields: Set<String> = []   // otomatik doldurulan alanlar ("runway", "stand", "procedure")
 
-    @MainActor init(icao: String, phase: FlightRecord.Phase) {
+    @MainActor init(icao: String, phase: FlightRecord.Phase, flight: FlightAttributes.ContentState? = nil) {
         record = FlightRecord(icao: icao, phase: phase)
-        if let s = FlightSession.shared.state {
+        if let s = flight ?? FlightSession.shared.recent {
             record.flight = s.flight
             record.aircraftType = s.aircraftType
         }
@@ -18,14 +18,14 @@ struct RecordRequest: Identifiable {
     @MainActor static func forCurrent(_ s: FlightAttributes.ContentState) -> RecordRequest {
         let landed = s.turn?.outboundArrival.map { Date() > $0 } ?? false
         if landed, let dest = FlightHelpers.destICAO(s) {
-            var r = RecordRequest(icao: dest, phase: .arrival)
+            var r = RecordRequest(icao: dest, phase: .arrival, flight: s)
             if let h = FlightHelpers.mostCommon(s.turn?.destRunwayHistory ?? []) {
                 r.record.runway = h
                 r.autoFields.insert("runway")
             }
             return r
         }
-        var r = RecordRequest(icao: s.origin ?? "LTFM", phase: .departure)
+        var r = RecordRequest(icao: s.origin ?? "LTFM", phase: .departure, flight: s)
         if !s.runway.isEmpty { r.record.runway = s.runway; r.autoFields.insert("runway") }
         if let sid = s.sid, !sid.isEmpty { r.record.procedure = sid; r.autoFields.insert("procedure") }
         if !s.stand.isEmpty { r.record.stand = s.stand; r.autoFields.insert("stand") }

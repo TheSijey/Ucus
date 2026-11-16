@@ -29,6 +29,28 @@ struct AirportsView: View {
                         }
                     }
                 }
+                if session.state == nil, let s = session.last {
+                    Section(L("Son uçuşun · \(s.flight)", "Your last flight · \(s.flight)")) {
+                        ForEach(FlightHelpers.airports(s), id: \.self) { icao in
+                            HStack {
+                                NavigationLink(value: icao) { AirportRow(icao: icao, subtitle: nil) }
+                                Menu {
+                                    Button { model.recordRequest = RecordRequest(icao: icao, phase: .arrival, flight: s) } label: {
+                                        Label(L("Varış kaydı", "Arrival log"), systemImage: "airplane.arrival")
+                                    }
+                                    Button { model.recordRequest = RecordRequest(icao: icao, phase: .departure, flight: s) } label: {
+                                        Label(L("Kalkış kaydı", "Departure log"), systemImage: "airplane.departure")
+                                    }
+                                } label: {
+                                    Image(systemName: "square.and.pencil").font(.title3).frame(width: 44, height: 44)
+                                }
+                                .accessibilityLabel(L("\(icao) için kayıt ekle", "Add a log for \(icao)"))
+                            }
+                        }
+                        Text(L("Uçuş bittikten sonra 24 saat burada durur; kayıt ve not ekleyebilirsin.", "Stays here for 24 hours after the flight so you can add logs and notes."))
+                            .font(.caption).foregroundStyle(Palette.secondary)
+                    }
+                }
                 let known = store.knownAirports.filter { icao in !(session.state.map { FlightHelpers.airports($0).contains(icao) } ?? false) }
                 if !known.isEmpty {
                     Section(L("Kayıtlı meydanlar", "Saved airports")) {

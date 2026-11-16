@@ -38,10 +38,12 @@ final class DriveTime: ObservableObject {
     static let shared = DriveTime()
     @Published private(set) var cache: [Int: Int] = [:]   // çıkış (5 dk'ya yuvarlı) → dakika
     private var loading = Set<Int>()
+    @Published private var failedSlots = Set<Int>()
+    func failed(_ d: Date) -> Bool { failedSlots.contains(slot(d)) }
 
     private func slot(_ d: Date) -> Int { Int(d.timeIntervalSince1970 / 300) }
 
-    func clear() { cache = [:] }
+    func clear() { cache = [:]; failedSlots = [] }
 
     func minutes(for departure: Date) -> Int? { cache[slot(departure)] }
 
@@ -60,6 +62,7 @@ final class DriveTime: ObservableObject {
             let eta = try await MKDirections(request: req).calculateETA()
             cache[key] = Int((eta.expectedTravelTime / 60).rounded())
         } catch {
+            failedSlots.insert(key)
             DebugLog.add("Yol süresi alınamadı: \(error.localizedDescription)")
         }
     }
@@ -68,25 +71,31 @@ final class DriveTime: ObservableObject {
 /// "Bu saatte çıkarsan yol ~52 dk · imzadan 8 dk önce varırsın"
 struct DriveInfoLine: View {
     let departure: Date
-    let signOn: Date
+    let signOn: Date?
+    var prefix: String? = nil
     @ObservedObject private var drive = DriveTime.shared
 
     var body: some View {
         Group {
             if HomeLocation.coordinate != nil, let m = drive.minutes(for: departure) {
-                let spare = Int(signOn.timeIntervalSince(departure.addingTimeInterval(Double(m) * 60)) / 60)
+                let spare = signOn.map { Int($0.timeIntervalSince(departure.addingTimeInterval(Double(m) * 60)) / 60) } ?? 0
                 HStack(spacing: 6) {
                     Image(systemName: spare >= 0 ? "car.fill" : "exclamationmark.triangle.fill")
-                    Text(L("Trafikle yol ~\(Display.minutes(m))", "Drive ~\(Display.minutes(m)) with traffic") + " · "
-                         + (spare >= 0 ? L("imzadan \(Display.minutes(spare)) önce varırsın", "you arrive \(Display.minutes(spare)) before sign-on")
-                                       : L("imzaya \(Display.minutes(-spare)) geç kalabilirsin", "you may be \(Display.minutes(-spare)) late for sign-on")))
+                    Text(Self.cap((prefix.map { $0 + ": " } ?? "") + L("trafikle yol ~\(Display.minutes(m))", "drive ~\(Display.minutes(m)) with traffic")
+                         + (signOn == nil ? "" : " · " + (spare >= 0 ? L("imzadan \(Display.minutes(spare)) önce varırsın", "you arrive \(Display.minutes(spare)) before sign-on")
+                                       : L("imzaya \(Display.minutes(-spare)) geç kalabilirsin", "you may be \(Display.minutes(-spare)) late for sign-on")))))
                 }
                 .font(.footnote.bold())
                 .foregroundStyle(spare >= 0 ? Color.white.opacity(0.85) : Palette.warn)
+            } else if HomeLocation.coordinate != nil, drive.failed(departure) {
+                Label(L("Yol süresi alınamadı", "Couldn't get drive time"), systemImage: "car")
+                    .font(.footnote).foregroundStyle(Palette.secondary)
             }
         }
         .task(id: Int(departure.timeIntervalSince1970 / 300)) { await drive.load(for: departure) }
     }
+
+    private static func cap(_ s: String) -> String { s.prefix(1).uppercased(with: Lang.locale) + s.dropFirst() }
 }
 
 /// Tek seferlik konum (izin ister).
@@ -143,9 +152,12 @@ struct HomeLocationSection: View {
         Section {
             if let label {
                 LabeledContent(L("Ev", "Home")) { Text(label).lineLimit(2).multilineTextAlignment(.trailing) }
-                if leaveMinutes > 0, let s = session.state, !s.isOutstation {
-                    DriveInfoLine(departure: s.signOn.addingTimeInterval(-Double(leaveMinutes) * 60), signOn: s.signOn)
+                if leaveMinutes > 0, let s = session.state, !s.isOutstation, s.signOn > Date() {
+                    DriveInfoLine(departure: s.signOn.addingTimeInterval(-Double(leaveMinutes) * 60), signOn: s.signOn,
+                                  prefix: L("Bugünkü uçuşta", "For today's flight"))
                 }
+                DriveInfoLine(departure: Date(), signOn: nil, prefix: L("Şu an", "Right now"))
+                    .foregroundStyle(.primary)
                 Button(L("Ev konumunu kaldır", "Remove home location"), role: .destructive) {
                     HomeLocation.clear(); self.label = nil
                 }

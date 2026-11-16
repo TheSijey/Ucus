@@ -39,7 +39,7 @@ struct ContentView: View {
         }
         .sheet(item: $model.recordRequest) { RecordSheet(request: $0) }
         .onReceive(NotificationCenter.default.publisher(for: .openFlightRecord)) { _ in
-            if let s = session.state { model.recordRequest = RecordRequest.forCurrent(s) }
+            if let s = session.recent { model.recordRequest = RecordRequest.forCurrent(s) }
         }
         .alert(L("Tarih farklı", "Different date"), isPresented: Binding(get: { model.pending != nil }, set: { if !$0 { model.pending = nil } })) {
             Button(L("Yine de ekle", "Add anyway")) {
