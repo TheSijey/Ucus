@@ -17,6 +17,7 @@ struct TodayView: View {
             ScrollView {
                 if let s = session.state {
                     VStack(spacing: 12) {
+                        if Self.isLanded(s) { finishCard(s) }
                         PhaseBar(state: s)
                         phaseCard(s)
                         standCard(s)
@@ -57,6 +58,43 @@ struct TodayView: View {
                 if let s = session.state { ManualEditSheet(state: s, field: field).environmentObject(model) }
             }
         }
+    }
+
+    // MARK: Uçuşu bitir
+
+    /// İndi mi? Dönüş varsa dönüş inişi, yoksa varış; saatler bilinmiyorsa kalkıştan 1 sa sonra.
+    static func isLanded(_ s: FlightAttributes.ContentState, now: Date = Date()) -> Bool {
+        if s.turn?.returnFlight != nil, let r = s.turn?.returnArrival { return now > r }
+        if s.turn?.returnFlight == nil, let a = s.turn?.outboundArrival { return now > a }
+        if s.turn?.outboundArrival == nil, let d = s.departureTime { return now > d.addingTimeInterval(3600) }
+        return false
+    }
+
+    private func finishCard(_ s: FlightAttributes.ContentState) -> some View {
+        let req = RecordRequest.forCurrent(s)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "airplane.arrival").font(.title3).foregroundStyle(Palette.outbound)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L("İndin · \(req.record.icao)", "Landed · \(req.record.icao)")).font(.headline)
+                    Text(L("Meydan için kısa bir kayıt ya da not bırakabilir, sonra uçuşu bitirebilirsin.", "You can leave a short log or note for the airport, then finish the flight."))
+                        .font(.footnote).foregroundStyle(Palette.secondary)
+                }
+            }
+            Button {
+                var r = req
+                r.finish = true
+                model.recordRequest = r
+            } label: {
+                Text(L("Uçuşu bitir", "Finish flight")).font(.headline).frame(maxWidth: .infinity, minHeight: 46)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Palette.outbound)
+            .foregroundStyle(.black)
+        }
+        .padding(16)
+        .background(Palette.outbound.opacity(0.12), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Palette.outbound.opacity(0.35)))
     }
 
     // MARK: Sade üst bölüm (2.4)
@@ -403,7 +441,7 @@ struct TodayView: View {
             Button(role: .destructive) {
                 Task { await model.remove() }
             } label: {
-                Text(L("Uçuşu kaldır", "Remove flight")).font(.subheadline).frame(maxWidth: .infinity).padding(.vertical, 4)
+                Text(L("Takibi bırak", "Stop tracking")).font(.subheadline).frame(maxWidth: .infinity).padding(.vertical, 4)
             }
             .buttonStyle(.bordered)
         }

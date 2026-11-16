@@ -121,7 +121,13 @@ final class AppModel: ObservableObject {
     }
 
     func remove() async {
-        await LiveActivityManager.endAll(reason: "Kaldır butonu")
+        await LiveActivityManager.endAll(reason: "Takibi bırak butonu")
+        refreshNote = nil
+    }
+
+    /// İnişten sonra "Uçuşu bitir": takip kapanır, uçuş 24 saat "Son uçuşun" olarak Meydanlar'da kalır.
+    func finishFlight() async {
+        await LiveActivityManager.endAll(reason: "Uçuşu bitir")
         refreshNote = nil
     }
 }

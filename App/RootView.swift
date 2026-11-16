@@ -37,7 +37,7 @@ struct ContentView: View {
         .sheet(isPresented: $model.showSettings) {
             SettingsView()
         }
-        .sheet(item: $model.recordRequest) { RecordSheet(request: $0) }
+        .sheet(item: $model.recordRequest) { RecordSheet(request: $0).environmentObject(model) }
         .onReceive(NotificationCenter.default.publisher(for: .openFlightRecord)) { _ in
             if let s = session.recent { model.recordRequest = RecordRequest.forCurrent(s) }
         }
