@@ -55,7 +55,7 @@ struct AddFlightView: View {
                     DatePicker(L("Tarih", "Date"), selection: $date,
                                in: UTC.calendar.date(byAdding: .day, value: -1, to: UTC.startOfDay(Date()))!...,
                                displayedComponents: .date)
-                        .datePickerStyle(editing == nil ? .graphical : .compact)
+                        .datePickerStyle(.graphical)
                         .environment(\.timeZone, UTC.zone)
                         .environment(\.locale, Lang.locale)
                 } header: {
