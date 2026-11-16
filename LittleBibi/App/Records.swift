@@ -133,7 +133,7 @@ struct SharedNursing: Codable, Equatable {
 
 // MARK: Kontrol ve aşı takvimi
 
-/// T.C. Sağlık Bakanlığı'nın bebek izlem ve çocukluk dönemi aşı takvimine göre, ilk iki yıl.
+/// T.C. Sağlık Bakanlığı'nın bebek izlem ve çocukluk dönemi aşı takvimine göre, ilk iki yıl (Kasım 2026 itibarıyla).
 /// Kesin tarihleri aile hekimi belirler; uygulama yalnızca hatırlatır.
 struct ScheduleItem: Identifiable {
     let key: String
