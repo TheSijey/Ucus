@@ -28,6 +28,10 @@ struct RootView: View {
                 .tabItem { Label("Bugün", systemImage: "house.fill") }
             HistoryView()
                 .tabItem { Label("Geçmiş", systemImage: "calendar") }
+            HealthView()
+                .tabItem { Label("Sağlık", systemImage: "cross.case.fill") }
+            GiftsView()
+                .tabItem { Label("Takı", systemImage: "gift.fill") }
             SettingsView()
                 .tabItem { Label("Ayarlar", systemImage: "person.crop.circle") }
         }
@@ -44,6 +48,7 @@ struct RootView: View {
         .task(id: scenePhase) {
             // Uygulama açıkken aile kayıtlarını düzenli olarak eşitle.
             guard scenePhase == .active else { return }
+            Reminders.refresh(store)
             while !Task.isCancelled {
                 await CloudSync.shared.sync()
                 try? await Task.sleep(nanoseconds: 20_000_000_000)

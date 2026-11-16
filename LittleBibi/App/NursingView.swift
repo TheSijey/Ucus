@@ -62,7 +62,7 @@ struct NursingView: View {
                 sideButton(.right, n: n, now: now)
             }
 
-            Text(n == nil ? "Başlamak için emzirdiğiniz tarafa dokunun" : "Taraf değiştirmek için diğerine dokunun")
+            Text(n == nil ? (store.suggestedSide.map { "Öneri: \($0.title) taraftan başlayın" } ?? "Başlamak için emzirdiğiniz tarafa dokunun") : "Taraf değiştirmek için diğerine dokunun")
                 .font(.footnote)
                 .foregroundStyle(soft)
 

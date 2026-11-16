@@ -12,6 +12,9 @@ struct SettingsView: View {
     @State private var inviteLink = ""
     @State private var confirmStop = false
     @State private var confirmLeave = false
+    @AppStorage(Reminders.scheduleKey) private var remindSchedule = false
+    @AppStorage(Reminders.vitaminKey) private var remindVitamin = false
+    @AppStorage(Reminders.vitaminMinutesKey) private var vitaminMinutes = 9 * 60
 
     var body: some View {
         NavigationStack {
@@ -31,6 +34,25 @@ struct SettingsView: View {
                     Text("Bu ad, girdiğiniz kayıtların yanında görünür.")
                 }
                 familySection
+                Section {
+                    Toggle("Kontrol ve aşı hatırlatmaları", isOn: $remindSchedule)
+                    Toggle("D vitamini hatırlatması", isOn: $remindVitamin)
+                    if remindVitamin {
+                        DatePicker("Saat", selection: Binding(
+                            get: { Calendar.current.date(bySettingHour: vitaminMinutes / 60, minute: vitaminMinutes % 60, second: 0, of: Date()) ?? Date() },
+                            set: { d in
+                                let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+                                vitaminMinutes = (c.hour ?? 9) * 60 + (c.minute ?? 0)
+                            }), displayedComponents: .hourAndMinute)
+                    }
+                } header: {
+                    Text("Hatırlatmalar")
+                } footer: {
+                    Text("Kontrol ve aşılar bir gün önce hatırlatılır. D vitamini, o gün \"verildi\" işaretlenmediyse seçtiğiniz saatte hatırlatılır. Hatırlatmalar doğum tarihi girildikten sonra başlar ve her telefonda ayrı açılır.")
+                }
+                .onChange(of: remindSchedule) { _, on in remindersChanged(on) }
+                .onChange(of: remindVitamin) { _, on in remindersChanged(on) }
+                .onChange(of: vitaminMinutes) { _, _ in Reminders.refresh(store) }
                 Section {
                     if let exportURL {
                         ShareLink(item: exportURL) {
@@ -161,6 +183,13 @@ struct SettingsView: View {
             Task { await cloud.sync() }
         } label: {
             Label("Şimdi eşitle", systemImage: "arrow.triangle.2.circlepath")
+        }
+    }
+
+    private func remindersChanged(_ on: Bool) {
+        Task {
+            if on { _ = await Reminders.requestPermission() }
+            Reminders.refresh(store)
         }
     }
 

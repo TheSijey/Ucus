@@ -268,22 +268,16 @@ final class CloudSync: ObservableObject {
             }
             do {
                 let result = try await database.recordZoneChanges(inZoneWith: zoneID, since: token)
-                var entries: [Entry] = []
-                var profile: SharedProfile?
-                let decoder = JSONDecoder()
+                var records: [(name: String, data: Data)] = []
                 for (id, item) in result.modificationResultsByID {
                     guard case .success(let modification) = item else { continue }
                     let record = modification.record
                     guard record.recordType == CloudSync.recordType,
                           let json = record["json"] as? String,
                           let data = json.data(using: .utf8) else { continue }
-                    if id.recordName == Store.profileRecordName {
-                        profile = try? decoder.decode(SharedProfile.self, from: data)
-                    } else if let entry = try? decoder.decode(Entry.self, from: data) {
-                        entries.append(entry)
-                    }
+                    records.append((name: id.recordName, data: data))
                 }
-                let won = store.applyRemote(entries: entries, profile: profile)
+                let won = store.applyRemote(records)
                 state.dirty.subtract(won)
                 state.token = try? NSKeyedArchiver.archivedData(withRootObject: result.changeToken, requiringSecureCoding: true)
                 more = result.moreComing

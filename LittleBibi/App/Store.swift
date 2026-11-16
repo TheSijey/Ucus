@@ -9,6 +9,11 @@ final class Store: ObservableObject {
         var profile: Profile
         var entries: [Entry]
         var nursing: ActiveNursing?
+        var gifts: [Gift]?
+        var questions: [Question]?
+        var measurements: [Measurement]?
+        var marks: [ScheduleMark]?
+        var vitamins: [VitaminMark]?
     }
 
     /// Silinmemiş kayıtlar, en yeni en üstte.
@@ -16,8 +21,26 @@ final class Store: ObservableObject {
     @Published private(set) var profile = Profile()
     @Published private(set) var nursing: ActiveNursing?
 
+    /// Silinmiş olanlar da dahil ham listeler (eşitleme için). Ekranlar aşağıdaki süzülmüş hâllerini kullanır.
+    @Published private(set) var giftsRaw: [Gift] = []
+    @Published private(set) var questionsRaw: [Question] = []
+    @Published private(set) var measurementsRaw: [Measurement] = []
+    @Published private(set) var marksRaw: [ScheduleMark] = []
+    @Published private(set) var vitaminsRaw: [VitaminMark] = []
+    /// Ailedeki başka bir telefonda devam eden emzirme.
+    @Published private(set) var remoteNursing: SharedNursing?
+
     private var all: [Entry] = []
+    private var sharedNursingModified = Date.distantPast
     private let fileURL: URL
+
+    /// Bu telefonun kimliği; kendi emzirme sayacımızı diğerininkinden ayırır.
+    static let deviceID: String = {
+        if let id = UserDefaults.standard.string(forKey: "deviceID") { return id }
+        let id = UUID().uuidString
+        UserDefaults.standard.set(id, forKey: "deviceID")
+        return id
+    }()
 
     init() {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -28,6 +51,11 @@ final class Store: ObservableObject {
             profile = db.profile
             all = db.entries
             nursing = db.nursing
+            giftsRaw = db.gifts ?? []
+            questionsRaw = db.questions ?? []
+            measurementsRaw = db.measurements ?? []
+            marksRaw = db.marks ?? []
+            vitaminsRaw = db.vitamins ?? []
         }
         refresh()
         NursingActivity.sync(nursing, babyName: profile.babyName)
@@ -39,7 +67,8 @@ final class Store: ObservableObject {
     }
 
     private func save() {
-        let db = Database(profile: profile, entries: all, nursing: nursing)
+        let db = Database(profile: profile, entries: all, nursing: nursing, gifts: giftsRaw, questions: questionsRaw,
+                          measurements: measurementsRaw, marks: marksRaw, vitamins: vitaminsRaw)
         guard let data = try? JSONEncoder().encode(db) else { return }
         try? data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
@@ -53,6 +82,7 @@ final class Store: ObservableObject {
         profile = new
         save()
         if babyChanged { CloudSync.shared.markDirty(Store.profileRecordName) }
+        Reminders.refresh(self)
     }
 
     // MARK: Kayıtlar
@@ -158,63 +188,193 @@ final class Store: ObservableObject {
 
     private func setNursing(_ n: ActiveNursing?) {
         nursing = n
+        sharedNursingModified = Date()
         save()
         NursingActivity.sync(n, babyName: profile.babyName)
+        CloudSync.shared.markDirty(Store.nursingRecordName)
+    }
+
+    // MARK: Takı, sorular, gelişim, takvim, D vitamini
+
+    var gifts: [Gift] { giftsRaw.filter { !$0.deleted }.sorted { $0.date > $1.date } }
+    var questions: [Question] { questionsRaw.filter { !$0.deleted }.sorted { $0.created > $1.created } }
+    var measurements: [Measurement] { measurementsRaw.filter { !$0.deleted }.sorted { $0.date > $1.date } }
+
+    private func put<T: SyncRecord>(_ item: T, in list: ReferenceWritableKeyPath<Store, [T]>) {
+        var x = item
+        x.modified = Date()
+        if x.author.isEmpty { x.author = profile.myName }
+        if let i = self[keyPath: list].firstIndex(where: { $0.recordName == x.recordName }) {
+            self[keyPath: list][i] = x
+        } else {
+            self[keyPath: list].append(x)
+        }
+        save()
+        CloudSync.shared.markDirty(x.recordName)
+    }
+
+    func save(_ gift: Gift) { put(gift, in: \.giftsRaw) }
+    func remove(_ gift: Gift) { var g = gift; g.deleted = true; put(g, in: \.giftsRaw) }
+
+    func save(_ question: Question) { put(question, in: \.questionsRaw) }
+    func remove(_ question: Question) { var q = question; q.deleted = true; put(q, in: \.questionsRaw) }
+
+    func save(_ measurement: Measurement) { put(measurement, in: \.measurementsRaw) }
+    func remove(_ measurement: Measurement) { var m = measurement; m.deleted = true; put(m, in: \.measurementsRaw) }
+
+    func isDone(_ key: String) -> Bool {
+        marksRaw.contains { $0.key == key && !$0.deleted && $0.doneAt != nil }
+    }
+
+    func setDone(_ key: String, _ done: Bool) {
+        var mark = marksRaw.first { $0.key == key } ?? ScheduleMark(key: key)
+        mark.deleted = false
+        mark.doneAt = done ? Date() : nil
+        mark.author = profile.myName
+        put(mark, in: \.marksRaw)
+        Reminders.refresh(self)
+    }
+
+    /// Yapılmamış ve tarihi en yakın takvim maddesi.
+    func nextScheduleItem() -> (item: ScheduleItem, due: Date)? {
+        guard let birth = profile.birthDate else { return nil }
+        return Schedule.items
+            .filter { !isDone($0.key) }
+            .map { (item: $0, due: $0.due(birth: birth)) }
+            .min { $0.due < $1.due }
+    }
+
+    func vitaminMark(on date: Date) -> VitaminMark? {
+        let key = VitaminMark.dayKey(date)
+        return vitaminsRaw.first { $0.day == key && !$0.deleted }
+    }
+
+    func setVitamin(given: Bool, on date: Date = Date()) {
+        let key = VitaminMark.dayKey(date)
+        var mark = vitaminsRaw.first { $0.day == key } ?? VitaminMark(day: key)
+        mark.deleted = !given
+        mark.givenAt = Date()
+        mark.author = profile.myName
+        put(mark, in: \.vitaminsRaw)
+        Reminders.refresh(self)
+    }
+
+    /// Son emzirmeye göre hangi taraftan başlanacağı önerisi:
+    /// iki taraf da kullanıldıysa son biten taraf, tek taraf kullanıldıysa diğeri.
+    var suggestedSide: Side? {
+        guard let last = lastNursing else { return nil }
+        if last.leftSeconds > 0 && last.rightSeconds > 0 { return last.lastSide }
+        if last.leftSeconds > 0 { return .right }
+        if last.rightSeconds > 0 { return .left }
+        return nil
     }
 
     // MARK: Aile eşitlemesi
 
     static let profileRecordName = "profile"
+    static let nursingRecordName = "nursing"
     static func recordName(_ id: UUID) -> String { "e-" + id.uuidString }
 
     /// Buluta gönderilebilecek her şeyin adı (silinmiş kayıtlar dahil).
     var allRecordNames: [String] {
         var names = all.map { Store.recordName($0.id) }
+        names += giftsRaw.map(\.recordName) + questionsRaw.map(\.recordName) + measurementsRaw.map(\.recordName)
+        names += marksRaw.map(\.recordName) + vitaminsRaw.map(\.recordName)
         if profile.babyModified != nil { names.append(Store.profileRecordName) }
         return names
     }
 
+    private func encode<T: Encodable>(_ value: T?) -> String? {
+        guard let value, let data = try? JSONEncoder().encode(value) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
     /// Bir kaydın buluta yazılacak hâli.
     func cloudJSON(for name: String) -> String? {
-        let data: Data?
         if name == Store.profileRecordName {
             guard let modified = profile.babyModified else { return nil }
-            data = try? JSONEncoder().encode(SharedProfile(babyName: profile.babyName, birthDate: profile.birthDate, modified: modified))
-        } else if let e = all.first(where: { Store.recordName($0.id) == name }) {
-            data = try? JSONEncoder().encode(e)
-        } else {
-            data = nil
+            return encode(SharedProfile(babyName: profile.babyName, birthDate: profile.birthDate, modified: modified))
         }
-        return data.flatMap { String(data: $0, encoding: .utf8) }
+        if name == Store.nursingRecordName {
+            return encode(SharedNursing(active: nursing, author: profile.myName, device: Store.deviceID, modified: sharedNursingModified))
+        }
+        switch name.prefix(2) {
+        case "e-": return encode(all.first { Store.recordName($0.id) == name })
+        case "g-": return encode(giftsRaw.first { $0.recordName == name })
+        case "q-": return encode(questionsRaw.first { $0.recordName == name })
+        case "m-": return encode(measurementsRaw.first { $0.recordName == name })
+        case "s-": return encode(marksRaw.first { $0.recordName == name })
+        case "v-": return encode(vitaminsRaw.first { $0.recordName == name })
+        default: return nil
+        }
+    }
+
+    private func merge<T: SyncRecord>(_ data: Data, as type: T.Type, into list: ReferenceWritableKeyPath<Store, [T]>) -> Bool {
+        guard let remote = try? JSONDecoder().decode(type, from: data) else { return false }
+        if let i = self[keyPath: list].firstIndex(where: { $0.recordName == remote.recordName }) {
+            guard remote.modified > self[keyPath: list][i].modified else { return false }
+            self[keyPath: list][i] = remote
+        } else {
+            self[keyPath: list].append(remote)
+        }
+        return true
     }
 
     /// Buluttan gelenleri yerel veriyle birleştirir: yeni tarihli olan kazanır.
     /// Bulut sürümünün kazandığı kayıtların adlarını döndürür.
-    func applyRemote(entries remote: [Entry], profile remoteProfile: SharedProfile?) -> Set<String> {
+    func applyRemote(_ records: [(name: String, data: Data)]) -> Set<String> {
         var won = Set<String>()
+        var entriesChanged = false
         var index: [UUID: Int] = [:]
         for (i, e) in all.enumerated() { index[e.id] = i }
-        for r in remote {
-            if let i = index[r.id] {
-                if r.modified > all[i].modified {
-                    all[i] = r
-                    won.insert(Store.recordName(r.id))
+        let decoder = JSONDecoder()
+
+        for record in records {
+            let name = record.name
+            if name == Store.profileRecordName {
+                if let rp = try? decoder.decode(SharedProfile.self, from: record.data),
+                   rp.modified > (profile.babyModified ?? .distantPast) {
+                    profile.babyName = rp.babyName
+                    profile.birthDate = rp.birthDate
+                    profile.babyModified = rp.modified
+                    won.insert(name)
                 }
-            } else {
-                all.append(r)
-                index[r.id] = all.count - 1
-                won.insert(Store.recordName(r.id))
+                continue
+            }
+            if name == Store.nursingRecordName {
+                if let rn = try? decoder.decode(SharedNursing.self, from: record.data), rn.device != Store.deviceID {
+                    remoteNursing = rn.active == nil ? nil : rn
+                    if rn.modified > sharedNursingModified { won.insert(name) }
+                }
+                continue
+            }
+            switch name.prefix(2) {
+            case "e-":
+                guard let r = try? decoder.decode(Entry.self, from: record.data) else { continue }
+                if let i = index[r.id] {
+                    if r.modified > all[i].modified {
+                        all[i] = r
+                        won.insert(name)
+                        entriesChanged = true
+                    }
+                } else {
+                    all.append(r)
+                    index[r.id] = all.count - 1
+                    won.insert(name)
+                    entriesChanged = true
+                }
+            case "g-": if merge(record.data, as: Gift.self, into: \.giftsRaw) { won.insert(name) }
+            case "q-": if merge(record.data, as: Question.self, into: \.questionsRaw) { won.insert(name) }
+            case "m-": if merge(record.data, as: Measurement.self, into: \.measurementsRaw) { won.insert(name) }
+            case "s-": if merge(record.data, as: ScheduleMark.self, into: \.marksRaw) { won.insert(name) }
+            case "v-": if merge(record.data, as: VitaminMark.self, into: \.vitaminsRaw) { won.insert(name) }
+            default: continue
             }
         }
-        if let rp = remoteProfile, rp.modified > (profile.babyModified ?? .distantPast) {
-            profile.babyName = rp.babyName
-            profile.birthDate = rp.birthDate
-            profile.babyModified = rp.modified
-            won.insert(Store.profileRecordName)
-        }
+        if entriesChanged { refresh() }
         if !won.isEmpty {
-            refresh()
             save()
+            Reminders.refresh(self)
         }
         return won
     }

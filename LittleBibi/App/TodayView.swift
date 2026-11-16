@@ -25,6 +25,9 @@ struct TodayView: View {
                         header(now: now)
                         if let n = store.nursing {
                             nursingBanner(n)
+                        } else if let remote = store.remoteNursing, let active = remote.active,
+                                  now.timeIntervalSince(remote.modified) < 3 * 3600 {
+                            remoteNursingBanner(active, author: remote.author, now: now)
                         }
                         statusCard(now: now)
                         Text("Hızlı kayıt")
@@ -32,6 +35,7 @@ struct TodayView: View {
                             .foregroundStyle(Theme.ink)
                         quickGrid
                         handoverCard(now: now)
+                        healthCard(now: now)
                         todayList(now: now)
                     }
                     .padding(.horizontal, 16)
@@ -105,6 +109,61 @@ struct TodayView: View {
         .buttonStyle(.plain)
     }
 
+    private func remoteNursingBanner(_ n: ActiveNursing, author: String, now: Date) -> some View {
+        HStack {
+            Image(systemName: "heart.fill")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(author.isEmpty ? "Diğer telefonda" : author) emziriyor")
+                    .font(.subheadline.weight(.bold))
+                Text("\(n.side?.title ?? "") meme · \(n.isRunning ? "toplam \(Fmt.duration(n.total(at: now)))" : "duraklatıldı")")
+                    .font(.footnote)
+            }
+            Spacer()
+        }
+        .foregroundStyle(Theme.sleepInk)
+        .padding(14)
+        .background(Theme.sleep, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
+    /// D vitamini, sıradaki kontrol ve bekleyen sorular. Yalnızca doğumdan sonra görünür.
+    @ViewBuilder
+    private func healthCard(now: Date) -> some View {
+        if store.profile.birthDate != nil {
+            let mark = store.vitaminMark(on: now)
+            let openQuestions = store.questions.filter { !$0.answered }.count
+            Card {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Sağlık")
+                        .font(.headline)
+                        .foregroundStyle(Theme.ink)
+                    Button {
+                        store.setVitamin(given: mark == nil, on: now)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: mark == nil ? "circle" : "checkmark.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(mark == nil ? Theme.muted : Theme.burpInk)
+                            Text(mark.map { "D vitamini bugün verildi · \(Fmt.time($0.givenAt))" } ?? "D vitamini bugün verilmedi")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Theme.ink)
+                            Spacer()
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(mark == nil ? "Verildi olarak işaretle" : "İşareti kaldır")
+                    if let next = store.nextScheduleItem() {
+                        Text("Sıradaki: \(next.item.title) · \(Fmt.relativeDay(next.due, now: now))\(openQuestions > 0 ? " · \(openQuestions) soru hazır" : "")")
+                            .font(.footnote)
+                            .foregroundStyle(Theme.muted)
+                    }
+                }
+            }
+        }
+    }
+
     private func statusCard(now: Date) -> some View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
@@ -119,7 +178,7 @@ struct TodayView: View {
                         .font(.subheadline)
                         .foregroundStyle(Theme.ink)
                     if let last = store.lastNursing, let side = last.lastSide {
-                        Text("Son emzirilen taraf: \(side.title)")
+                        Text(store.suggestedSide.map { "Sıradaki öneri: \($0.title) · son biten taraf \(side.title)" } ?? "Son emzirilen taraf: \(side.title)")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Theme.sleepInk)
                             .padding(.horizontal, 12)
