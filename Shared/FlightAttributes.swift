@@ -30,6 +30,9 @@ struct FlightAttributes: ActivityAttributes {
         var originTZ: String? = nil      // "Asia/Beirut"
         var signOnManual: Bool? = nil    // imza elle girildi (yoksa tahmin)
         var pickupAt: Date? = nil        // otelden çıkış (elle)
+        // Kullanıcının belirlediği bacaklar (ilk sefer hariç). nil: dönüş otomatik tahmin; []: tek bacak.
+        var tripLegs: [String]? = nil
+        var extraLegs: [LegInfo]? = nil  // dönüşten sonraki bacaklar (3., 4. ...)
     }
 
     /// Kullanıcının aradığı şey (1751, LTD ...). Yenilemede tekrar kullanılır.
@@ -49,6 +52,20 @@ struct TurnInfo: Codable, Hashable {
     var destGateHistory: [String] = []    // son günlerdeki gate'ler
     var arrivalGateToday: String? = nil   // varış gate'i (bazı meydanlar yayınlar)
     var destRunwayHistory: [String] = []  // son günlerde varışta kullanılan iniş pistleri
+    var returnToICAO: String? = nil       // ikinci bacağın varışı (nil = İstanbul)
+    var returnToIATA: String? = nil
+}
+
+/// Dönüşten sonraki bir bacak.
+struct LegInfo: Codable, Hashable {
+    var flight: String
+    var fromICAO: String
+    var fromIATA: String
+    var toICAO: String
+    var toIATA: String
+    var toCity: String
+    var departure: Date?
+    var arrival: Date?
 }
 
 /// Uçağın İstanbul'a gelen son seferi.
@@ -88,6 +105,9 @@ extension FlightAttributes.ContentState {
 
     /// Turun bittiği an: dönüş inişi; dönüş yoksa (tek yön) varış + 30 dk; o da yoksa imza + 6 sa.
     var tourEnd: Date {
+        if let last = extraLegs?.last, let a = last.arrival ?? last.departure.map({ $0.addingTimeInterval(3 * 3600) }) {
+            return max(a.addingTimeInterval(last.toICAO == "LTFM" ? 0 : 30 * 60), hideAt)
+        }
         let end = turn?.returnArrival
             ?? turn?.outboundArrival.map { $0.addingTimeInterval(30 * 60) }
             ?? signOn.addingTimeInterval(6 * 3600)
@@ -97,7 +117,12 @@ extension FlightAttributes.ContentState {
     /// Dış meydandan kalkış (CDM yok).
     var isOutstation: Bool { origin != nil }
     /// Dönüşü olmayan uçuş (yatılı ya da dış meydandan gelen).
-    var isOneWay: Bool { turn != nil && turn?.returnFlight == nil }
+    var isOneWay: Bool {
+        if let last = extraLegs?.last { return last.toICAO != "LTFM" }
+        return turn != nil && turn?.returnFlight == nil
+    }
+    /// Son inişin saati (tüm bacaklar).
+    var lastArrival: Date? { extraLegs?.last?.arrival ?? turn?.returnArrival ?? turn?.outboundArrival }
     /// Kalkış meydanı kodu: "IST" ya da "BEY".
     var originCode: String { originIATA ?? (origin ?? "IST") }
     /// Kalkış meydanının saat dilimi.

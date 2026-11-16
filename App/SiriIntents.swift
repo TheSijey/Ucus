@@ -18,7 +18,7 @@ struct StartNextFlightIntent: AppIntent {
         }
         let state: FlightAttributes.ContentState
         do {
-            state = try await FlightLoader.load(query: planned.flight)
+            state = try await FlightLoader.load(query: planned.flight, legs: planned.legNumbers)
         } catch {
             return .result(dialog: IntentDialog(stringLiteral: L("\(planned.flight) CDM'den okunamadı. Uygulamadan tekrar dene.", "Couldn't read \(planned.flight) from CDM. Try again in the app.")))
         }

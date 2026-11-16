@@ -29,6 +29,9 @@ struct TourScreen: View {
                         outboundStep(s)
                         if !s.isOutstation { destinationStep(s) }
                         if let t = s.turn, t.returnFlight != nil { returnStep(t) }
+                        ForEach(Array((s.extraLegs ?? []).enumerated()), id: \.offset) { i, leg in
+                            legStep(leg, number: (s.turn?.returnFlight != nil ? 3 : 2) + i)
+                        }
                         endStep(s)
                     }
                     .padding(16)
@@ -164,20 +167,39 @@ struct TourScreen: View {
         let dest = tr.destIATA.isEmpty ? tr.destICAO : tr.destIATA
         return Step(dot: .filled(Palette.ret), line: .thick(Palette.ret)) {
             Text(L("Dönüş", "Return") + " · \(tr.returnFlight ?? "")").font(.caption).foregroundStyle(Color(red: 0.6, green: 0.79, blue: 1))
-            Text("\(dest) \(t(tr.returnDeparture)) → IST \(t(tr.returnArrival))").font(.title3.bold())
+            Text("\(dest) \(t(tr.returnDeparture)) → \(tr.returnToIATA ?? "IST") \(t(tr.returnArrival))").font(.title3.bold())
             if let d = FlightHelpers.duration(tr.returnDeparture, tr.returnArrival) {
                 Text(L("Süre", "Block") + " \(d)").font(.footnote).foregroundStyle(.white.opacity(0.75))
             }
         }
     }
 
+    private func legStep(_ leg: LegInfo, number: Int) -> some View {
+        Step(dot: .filled(Palette.stand), line: .thick(Palette.stand)) {
+            Text(L("\(number). bacak", "Leg \(number)") + " · \(leg.flight)").font(.caption).foregroundStyle(Palette.stand)
+            if leg.toICAO.isEmpty {
+                Text(L("Bu bacağın bilgisi bulunamadı.", "No info found for this leg.")).font(.subheadline).foregroundStyle(Palette.secondary)
+            } else {
+                Text("\(leg.fromIATA.isEmpty ? leg.fromICAO : leg.fromIATA) \(t(leg.departure)) → \(leg.toIATA.isEmpty ? leg.toICAO : leg.toIATA) \(t(leg.arrival))")
+                    .font(.title3.bold())
+                if let d = FlightHelpers.duration(leg.departure, leg.arrival) {
+                    Text(L("Süre", "Block") + " \(d)").font(.footnote).foregroundStyle(.white.opacity(0.75))
+                }
+            }
+        }
+    }
+
     private func endStep(_ s: FlightAttributes.ContentState) -> some View {
         Step(dot: .filled(.white), line: .none) {
-            let endCity = s.isOneWay ? (s.turn.map { $0.destCity.isEmpty ? $0.destIATA : $0.destCity } ?? s.destination) : "İstanbul"
+            let endCity: String = {
+                if let last = s.extraLegs?.last { return last.toICAO == "LTFM" ? "İstanbul" : (last.toCity.isEmpty ? last.toIATA : last.toCity) }
+                if let r = s.turn?.returnToIATA { return r }
+                return s.isOneWay ? (s.turn.map { $0.destCity.isEmpty ? $0.destIATA : $0.destCity } ?? s.destination) : "İstanbul"
+            }()
             Text(L("Görev sonu", "Duty end") + " · \(endCity)" + (s.isOneWay && !s.isOutstation ? L(" (yatılı)", " (layover)") : ""))
                 .font(.caption).foregroundStyle(Palette.secondary)
-            Text(t(s.turn?.returnArrival ?? s.turn?.outboundArrival)).font(.title3.bold())
-            if let total = FlightHelpers.duration(s.signOn, s.turn?.returnArrival ?? s.turn?.outboundArrival) {
+            Text(t(s.lastArrival)).font(.title3.bold())
+            if let total = FlightHelpers.duration(s.signOn, s.lastArrival) {
                 Text(L("İmzadan itibaren", "Since sign-on") + " \(total)").font(.footnote).foregroundStyle(.white.opacity(0.75))
             }
             Text(s.isOneWay

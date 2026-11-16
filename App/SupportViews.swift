@@ -24,16 +24,29 @@ enum UTCFormat {
     }
 }
 
+/// Uçuş ekle / düzenle: tek bacak ya da git-gel; dönüş otomatik önerilir, istenirse değiştirilir; + bacak ekle.
 struct AddFlightView: View {
     @Environment(\.dismiss) private var dismiss
-    let onAdd: (Date, String) -> Void
+    var editing: PlannedFlight? = nil
+    let onSave: (PlannedFlight) -> Void
+
+    struct Row: Identifiable, Equatable {
+        var id = UUID()
+        var flight = ""
+        var nextDay = false
+        var auto = false
+    }
 
     @State private var date = Date()
-    @State private var flight = ""
+    @State private var first = ""
+    @State private var kind: TripKind = .turn
+    @State private var rows: [Row] = []          // ilk bacaktan sonrakiler (git-gelde ilki dönüş)
+    @State private var previews: [String: LegInfo] = [:]
+    @State private var missing: Set<String> = []
     @State private var added: [String] = []
     @FocusState private var focused: Bool
 
-    private var canAdd: Bool { !flight.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var canAdd: Bool { !first.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
         NavigationStack {
@@ -42,34 +55,50 @@ struct AddFlightView: View {
                     DatePicker(L("Tarih", "Date"), selection: $date,
                                in: UTC.calendar.date(byAdding: .day, value: -1, to: UTC.startOfDay(Date()))!...,
                                displayedComponents: .date)
-                        .datePickerStyle(.graphical)
+                        .datePickerStyle(editing == nil ? .graphical : .compact)
                         .environment(\.timeZone, UTC.zone)
                         .environment(\.locale, Lang.locale)
                 } header: {
                     Text(L("Tarih (UTC – roster'daki gibi)", "Date (UTC – as on your roster)"))
                 }
+
                 Section {
-                    TextField(L("Sefer (1751 ya da TK1751)", "Flight (1751 or TK1751)"), text: $flight)
-                        .font(.title3.monospaced())
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
-                        .keyboardType(.asciiCapable)
-                        .focused($focused)
-                        .submitLabel(.done)
-                        .onSubmit(addCurrent)
+                    Picker("", selection: $kind) {
+                        Text(L("Tek bacak", "One leg")).tag(TripKind.single)
+                        Text(L("Git-gel", "Out and back")).tag(TripKind.turn)
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: kind) { _, k in applyKind(k) }
+
+                    legField(title: L("1. bacak", "Leg 1"), text: $first, nextDay: nil, autoBadge: false, previous: nil, focus: true)
+                    ForEach($rows) { $row in
+                        let i = rows.firstIndex { $0.id == row.id } ?? 0
+                        legField(title: kind == .turn && i == 0 ? L("Dönüş", "Return") : L("\(i + 2). bacak", "Leg \(i + 2)"),
+                                 text: $row.flight, nextDay: $row.nextDay, autoBadge: row.auto,
+                                 previous: i == 0 ? first : rows[i - 1].flight,
+                                 onDelete: kind == .turn && i == 0 ? nil : { rows.removeAll { $0.id == row.id } },
+                                 onEdit: { row.auto = false })
+                    }
+                    Button { rows.append(Row()) } label: {
+                        Label(L("Bacak ekle", "Add leg"), systemImage: "plus.circle")
+                    }
+                } header: {
+                    Text(L("Seferler", "Flights"))
                 } footer: {
-                    Text(L("İstanbul kalkışlarında bilgiler İGA CDM'den, dış meydan kalkışlarında uçuş verisinden gelir. Ekledikçe takvim bir sonraki güne geçer.", "Istanbul departures use İGA CDM; outstation departures use flight data. The date moves to the next day after each add."))
+                    Text(L("Git-gel'de dönüş seferi otomatik önerilir; yanlışsa üstüne yazabilirsin. O gün daha fazla bacak varsa \"Bacak ekle\" ile ekle. Her seferin rotası ve saati altında görünür.",
+                           "For out-and-back the return flight is suggested automatically; type over it if wrong. If you fly more legs that day, use \"Add leg\". Each flight's route and time appear below it."))
                 }
+
                 if !added.isEmpty {
                     Section(L("Eklenenler", "Added")) {
                         ForEach(added, id: \.self) { Text($0) }
                     }
                 }
             }
-            // Klavye açıkken de hep görünen büyük Ekle butonu
             .safeAreaInset(edge: .bottom) {
-                Button(action: addCurrent) {
-                    Label(L("Ekle", "Add") + " · \(UTCFormat.shortDay(date))", systemImage: "plus.circle.fill")
+                Button(action: save) {
+                    Label(editing == nil ? L("Ekle", "Add") + " · \(UTCFormat.shortDay(date))" : L("Kaydet", "Save"),
+                          systemImage: editing == nil ? "plus.circle.fill" : "checkmark.circle.fill")
                         .font(.title3.bold())
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -81,24 +110,152 @@ struct AddFlightView: View {
                 .padding(.vertical, 8)
                 .background(.bar)
             }
-            .navigationTitle(L("Uçuş ekle", "Add flight"))
+            .navigationTitle(editing == nil ? L("Uçuş ekle", "Add flight") : L("Uçuşu düzenle", "Edit flight"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L("Bitti", "Done")) { dismiss() }
+                    Button(editing == nil ? L("Bitti", "Done") : L("Vazgeç", "Cancel")) { dismiss() }
                 }
             }
+            .onAppear(perform: loadEditing)
+            .task(id: "\(first)|\(kind)|\(UTC.startOfDay(date).timeIntervalSince1970)") { await suggestReturn() }
         }
     }
 
-    private func addCurrent() {
-        let f = flight.trimmingCharacters(in: .whitespaces)
+    // MARK: Satır
+
+    @ViewBuilder
+    private func legField(title: String, text: Binding<String>, nextDay: Binding<Bool>?, autoBadge: Bool, previous: String?,
+                          focus: Bool = false, onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Text(title).font(.subheadline).foregroundStyle(Palette.secondary).frame(width: 62, alignment: .leading)
+                TextField("TK1751", text: Binding(get: { text.wrappedValue }, set: { text.wrappedValue = $0; onEdit?() }))
+                    .font(.title3.monospaced())
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .keyboardType(.asciiCapable)
+                    .modifier(FocusIf(on: focus, binding: $focused))
+                if autoBadge { AutoBadge() }
+                if let onDelete {
+                    Button(role: .destructive, action: onDelete) { Image(systemName: "minus.circle.fill") }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel(L("Bacağı sil", "Delete leg"))
+                }
+            }
+            if let nextDay {
+                Toggle(L("Ertesi gün (UTC)", "Next day (UTC)"), isOn: nextDay).font(.caption)
+            }
+            let n = FlightStore.normalizeFlight(text.wrappedValue)
+            let day = legDay(nextDay?.wrappedValue == true)
+            if !n.isEmpty {
+                if let p = previews[key(n, day)] {
+                    let prevTo = previous.flatMap { prev in previews[key(FlightStore.normalizeFlight(prev), legDay(false))]?.toICAO ?? previews[key(FlightStore.normalizeFlight(prev), legDay(true))]?.toICAO }
+                    let disconnected = prevTo != nil && !p.fromICAO.isEmpty && prevTo != p.fromICAO
+                    Text("\(p.fromIATA.isEmpty ? p.fromICAO : p.fromIATA) → \(p.toIATA.isEmpty ? p.toICAO : p.toIATA) · \(FlightHelpers.utc(p.departure))" + (disconnected ? "" : " ✓"))
+                        .font(.caption.bold()).foregroundStyle(disconnected ? Palette.warn : Palette.outbound)
+                    if disconnected {
+                        Text(L("Bu sefer önceki bacağın indiği meydandan kalkmıyor.", "This flight doesn't depart from where the previous leg lands."))
+                            .font(.caption2).foregroundStyle(Palette.warn)
+                    }
+                } else if missing.contains(key(n, day)) {
+                    Text(L("Bu gün için bulunamadı; numarayı ve tarihi kontrol et.", "Not found for this day; check the number and date."))
+                        .font(.caption2).foregroundStyle(Palette.secondary)
+                }
+            }
+        }
+        .task(id: key(FlightStore.normalizeFlight(text.wrappedValue), legDay(nextDay?.wrappedValue == true))) {
+            try? await Task.sleep(nanoseconds: 700_000_000)   // yazmayı bitirince sor
+            await check(text.wrappedValue, nextDay: nextDay?.wrappedValue == true)
+        }
+    }
+
+    // MARK: Mantık
+
+    private func key(_ n: String, _ day: Date) -> String { "\(n)|\(day.timeIntervalSince1970)" }
+    private func legDay(_ next: Bool) -> Date {
+        let d = UTC.startOfDay(date)
+        return next ? UTC.calendar.date(byAdding: .day, value: 1, to: d) ?? d : d
+    }
+
+    private func check(_ raw: String, nextDay: Bool) async {
+        let n = FlightStore.normalizeFlight(raw)
+        guard n.range(of: #"^[A-Z0-9]{2}\d{1,4}[A-Z]?$"#, options: .regularExpression) != nil, InboundService.rapidKey != nil else { return }
+        let day = legDay(nextDay)
+        let k = key(n, day)
+        guard previews[k] == nil, !missing.contains(k) else { return }
+        if let p = await AeroDataBox.preview(flight: n, utcDay: day) { previews[k] = p } else { missing.insert(k) }
+    }
+
+    /// Git-gel: dönüşü sefer numarasının bir fazlası (olmazsa bir eksiği) olarak öner; kullanıcı yazdıysa dokunma.
+    private func suggestReturn() async {
+        guard kind == .turn else { return }
+        if rows.isEmpty { rows = [Row(auto: true)] }
+        guard rows[0].auto || rows[0].flight.isEmpty else { return }
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        let n = FlightStore.normalizeFlight(first)
+        let letters = String(n.prefix { $0.isLetter })
+        guard let num = Int(n.dropFirst(letters.count)) else { return }
+        var pick = "\(letters)\(num + 1)"
+        // Varış meydanı biliniyorsa önerinin oradan kalktığını doğrula; değilse bir eksiğini dene
+        await check(first, nextDay: false)
+        if let outTo = previews[key(n, legDay(false))]?.toICAO, InboundService.rapidKey != nil {
+            await check(pick, nextDay: false)
+            if previews[key(pick, legDay(false))]?.fromICAO != outTo {
+                let alt = "\(letters)\(num - 1)"
+                await check(alt, nextDay: false)
+                if previews[key(alt, legDay(false))]?.fromICAO == outTo { pick = alt }
+            }
+        }
+        guard kind == .turn, !rows.isEmpty, rows[0].auto || rows[0].flight.isEmpty else { return }
+        rows[0].flight = pick
+        rows[0].auto = true
+    }
+
+    private func applyKind(_ k: TripKind) {
+        if k == .turn, rows.first?.auto != true, rows.first.map({ !$0.flight.isEmpty }) != true {
+            if rows.isEmpty { rows = [Row(auto: true)] } else { rows[0].auto = true }
+        }
+        if k == .single, rows.first?.auto == true { rows.removeFirst() }
+    }
+
+    private func loadEditing() {
+        guard let f = editing, first.isEmpty else {
+            if editing == nil, rows.isEmpty, kind == .turn { rows = [Row(auto: true)] }
+            return
+        }
+        date = f.date
+        first = f.flight
+        kind = f.kind ?? .turn
+        rows = (f.legs ?? []).map { Row(id: $0.id, flight: $0.flight, nextDay: $0.dayOffset > 0) }
+        if kind == .turn, rows.isEmpty { rows = [Row(auto: true)] }
+    }
+
+    private func save() {
+        let f = first.trimmingCharacters(in: .whitespaces)
         guard !f.isEmpty else { return }
-        onAdd(date, f)
-        added.insert("\(UTCFormat.shortDay(date)) – \(FlightStore.normalizeFlight(f))", at: 0)
-        flight = ""
+        let legs = rows.filter { !$0.flight.trimmingCharacters(in: .whitespaces).isEmpty }
+            .map { PlannedLeg(id: $0.id, flight: $0.flight, dayOffset: $0.nextDay ? 1 : 0) }
+        var p = editing ?? PlannedFlight(date: date, flight: f)
+        p.date = date
+        p.flight = f
+        p.kind = kind
+        p.legs = legs
+        onSave(p)
+        if editing != nil { dismiss(); return }
+        added.insert("\(UTCFormat.shortDay(date)) – " + ([FlightStore.normalizeFlight(f)] + legs.map { FlightStore.normalizeFlight($0.flight) }).joined(separator: " · "), at: 0)
+        first = ""
+        rows = kind == .turn ? [Row(auto: true)] : []
         date = UTC.calendar.date(byAdding: .day, value: 1, to: date) ?? date
         focused = true
+    }
+}
+
+private struct FocusIf: ViewModifier {
+    let on: Bool
+    var binding: FocusState<Bool>.Binding
+    func body(content: Content) -> some View {
+        if on { content.focused(binding) } else { content }
     }
 }
 

@@ -32,7 +32,7 @@ struct ContentView: View {
         .tint(Palette.stand)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $model.showAdd) {
-            AddFlightView { date, flight in model.store.add(date: date, flight: flight) }
+            AddFlightView { p in model.store.add(date: p.date, flight: p.flight, kind: p.kind, legs: p.legs) }
         }
         .sheet(isPresented: $model.showSettings) {
             SettingsView()

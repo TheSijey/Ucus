@@ -411,8 +411,34 @@ enum AeroDataBox {
         return (0...extra).compactMap { cal.date(byAdding: .day, value: $0, to: ref) }.map { fmt.string(from: $0) }
     }
 
+    /// Bir bacak: verilen seferin `after` sonrasında (tercihen `from` meydanından) kalkan ilk uçuşu.
+    static func leg(flight raw: String, after: Date, from: String?) async -> LegInfo? {
+        let num = normFlight(raw)
+        var list: [Flight] = []
+        for d in istanbulDays(after, plus: 1) { list += await byNumber(num, day: d) }
+        func dep(_ f: Flight) -> Date? { f.departure?.runwayTime?.date ?? f.departure?.revisedTime?.date ?? f.departure?.scheduledTime?.date }
+        func arr(_ f: Flight) -> Date? { f.arrival?.runwayTime?.date ?? f.arrival?.revisedTime?.date ?? f.arrival?.predictedTime?.date ?? f.arrival?.scheduledTime?.date }
+        let later = list.filter { (dep($0) ?? .distantFuture) > after.addingTimeInterval(-1800) }
+        let matching = from.map { f in later.filter { $0.departure?.airport?.icao == f } } ?? later
+        guard let pick = (matching.isEmpty ? later : matching).min(by: { (dep($0) ?? .distantFuture) < (dep($1) ?? .distantFuture) }) else {
+            DebugLog.add("Bacak \(num) bulunamadı")
+            return nil
+        }
+        return LegInfo(flight: num,
+                       fromICAO: pick.departure?.airport?.icao ?? "", fromIATA: pick.departure?.airport?.iata ?? "",
+                       toICAO: pick.arrival?.airport?.icao ?? "", toIATA: pick.arrival?.airport?.iata ?? "",
+                       toCity: pick.arrival?.airport?.municipalityName ?? pick.arrival?.airport?.shortName ?? "",
+                       departure: dep(pick), arrival: arr(pick))
+    }
+
+    /// Uçuş ekleme ekranındaki doğrulama: o gün (UTC) bu seferin rotası ve saatleri.
+    static func preview(flight raw: String, utcDay: Date) async -> LegInfo? {
+        await leg(flight: raw, after: utcDay.addingTimeInterval(1800), from: nil)
+    }
+
     /// Bizim seferin varışı ve dönüş seferi (TK1751 → TK1752, olmazsa TK1750).
-    static func turn(registration: String, flight: String, around: Date?) async -> TurnInfo? {
+    /// `returnNumber`: nil = numara ±1 tahmini; "" = dönüş yok (tek bacak); değer = kullanıcının girdiği ikinci bacak.
+    static func turn(registration: String, flight: String, around: Date?, returnNumber: String? = nil) async -> TurnInfo? {
         let ref = around ?? Date()
         let ours = normFlight(flight)
         guard let day = istanbulDays(ref).first else { return nil }
@@ -449,7 +475,16 @@ enum AeroDataBox {
         // Dönüş: numara +1 / -1, varış meydanından İstanbul'a, gidişin varışından sonra
         var back: Flight? = nil
         let letters = String(ours.prefix { $0.isLetter })
-        if let n = Int(ours.dropFirst(letters.count)) {
+        if let explicit = returnNumber, !explicit.isEmpty {
+            // Kullanıcının girdiği ikinci bacak: varış meydanından, inişten sonra kalkan (İstanbul'a dönmesi şart değil)
+            var list: [Flight] = []
+            for d in istanbulDays(ref, plus: 1) { list += await byNumber(normFlight(explicit), day: d) }
+            back = list
+                .filter { $0.departure?.airport?.icao == dest.icao || $0.departure?.airport?.icao == nil }
+                .filter { (depRef($0) ?? .distantFuture) > (outArrival ?? ref) }
+                .min { (depRef($0) ?? .distantFuture) < (depRef($1) ?? .distantFuture) }
+            if back == nil { DebugLog.add("Tur: girilen ikinci bacak \(explicit) \(dest.icao ?? "") kalkışlı bulunamadı") }
+        } else if returnNumber == nil, let n = Int(ours.dropFirst(letters.count)) {
             for candidate in [n + 1, n - 1] where back == nil {
                 var list: [Flight] = []
                 for d in istanbulDays(ref, plus: 1) { list += await byNumber("\(letters)\(candidate)", day: d) }
@@ -476,6 +511,10 @@ enum AeroDataBox {
             returnDeparture: back.flatMap(depRef),
             returnArrival: back.flatMap(arrRef)
         )
+        if let to = back?.arrival?.airport, to.icao != InboundService.airport {
+            info.returnToICAO = to.icao
+            info.returnToIATA = to.iata
+        }
         info.destGateToday = back?.departure?.gate
         info.destGateHistory = history
         info.destRunwayHistory = await runwayHistory(flight: ours, to: dest.icao ?? "", before: ref)
@@ -634,7 +673,35 @@ enum TaxiStats {
 enum FlightLoader {
     /// İstanbul kalkışı CDM'den; CDM'de yoksa ve bir sefer numarasıysa dış meydan kalkışı olarak AeroDataBox'tan.
     /// `outstation`: zaten dış meydan uçuşu olduğu biliniyorsa (yenileme) CDM'ye hiç sorulmaz.
-    static func load(query: String, plannedDay: Date? = nil, outstation: Bool = false) async throws -> FlightAttributes.ContentState {
+    static func load(query: String, plannedDay: Date? = nil, outstation: Bool = false, legs: [String]? = nil) async throws -> FlightAttributes.ContentState {
+        var s = try await loadFirst(query: query, plannedDay: plannedDay, outstation: outstation, legs: legs)
+        s.tripLegs = legs
+        s.extraLegs = await resolveExtra(s, legs: legs)
+        return s
+    }
+
+    /// Dönüşten (ya da dış meydanda gidişten) sonraki bacaklar, sırayla.
+    private static func resolveExtra(_ s: FlightAttributes.ContentState, legs: [String]?) async -> [LegInfo]? {
+        guard let legs, InboundService.rapidKey != nil else { return nil }
+        // İstanbul kalkışında ilk girilen bacak "dönüş" (TurnInfo); dış meydanda hepsi ek bacak
+        let rest = s.isOutstation ? legs : Array(legs.dropFirst())
+        guard !rest.isEmpty else { return nil }
+        var out: [LegInfo] = []
+        var after = s.turn?.returnArrival ?? s.turn?.outboundArrival ?? (s.departureTime ?? s.signOn).addingTimeInterval(3600)
+        var from: String? = s.isOutstation ? s.turn?.destICAO : (s.turn?.returnToICAO ?? (s.turn?.returnFlight != nil ? InboundService.airport : s.turn?.destICAO))
+        for n in rest {
+            if let l = await AeroDataBox.leg(flight: n, after: after, from: from) {
+                out.append(l)
+                after = l.arrival ?? l.departure ?? after
+                from = l.toICAO
+            } else {
+                out.append(LegInfo(flight: AeroDataBox.normFlight(n), fromICAO: from ?? "", fromIATA: "", toICAO: "", toIATA: "", toCity: "", departure: nil, arrival: nil))
+            }
+        }
+        return out
+    }
+
+    private static func loadFirst(query: String, plannedDay: Date?, outstation: Bool, legs: [String]?) async throws -> FlightAttributes.ContentState {
         let q = CDMFetcher.normalize(query)
         let isFlightNumber = q.range(of: #"^[A-Z0-9]{2}\d{1,4}[A-Z]?$"#, options: .regularExpression) != nil
         if outstation, isFlightNumber, let s = await AeroDataBox.outstation(flight: q, day: plannedDay) {
@@ -652,15 +719,15 @@ enum FlightLoader {
             }
             throw error
         }
-        return await completeIstanbul(state)
+        return await completeIstanbul(state, returnNumber: legs.map { $0.first ?? "" })
     }
 
-    private static func completeIstanbul(_ input: FlightAttributes.ContentState) async -> FlightAttributes.ContentState {
+    private static func completeIstanbul(_ input: FlightAttributes.ContentState, returnNumber: String?) async -> FlightAttributes.ContentState {
         var state = input
         state.inbound = await InboundService.fetch(registration: state.registration,
                                                    before: state.eobt, stand: state.stand)
         if InboundService.rapidKey != nil, !state.registration.isEmpty {
-            state.turn = await AeroDataBox.turn(registration: state.registration, flight: state.flight, around: state.eobt)
+            state.turn = await AeroDataBox.turn(registration: state.registration, flight: state.flight, around: state.eobt, returnNumber: returnNumber)
         }
         return state
     }

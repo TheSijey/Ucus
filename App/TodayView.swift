@@ -64,6 +64,11 @@ struct TodayView: View {
 
     /// İndi mi? Dönüş varsa dönüş inişi, yoksa varış; saatler bilinmiyorsa kalkıştan 1 sa sonra.
     static func isLanded(_ s: FlightAttributes.ContentState, now: Date = Date()) -> Bool {
+        if let last = s.extraLegs?.last {
+            if let a = last.arrival { return now > a }
+            if let d = last.departure { return now > d.addingTimeInterval(3600) }
+            return false
+        }
         if s.turn?.returnFlight != nil, let r = s.turn?.returnArrival { return now > r }
         if s.turn?.returnFlight == nil, let a = s.turn?.outboundArrival { return now > a }
         if s.turn?.outboundArrival == nil, let d = s.departureTime { return now > d.addingTimeInterval(3600) }
@@ -475,8 +480,15 @@ struct PhaseBar: View {
     private func color(_ i: Int) -> Color { i <= 1 ? Palette.outbound : i == 2 ? Palette.signOn : Palette.stand }
 
     static func steps(_ s: FlightAttributes.ContentState) -> [String] {
-        var l = [s.isOutstation ? L("Otel", "Hotel") : L("Ev", "Home"), L("Yol", "Commute"), L("İmza", "Sign-on"), L("Uçuş", "Flight")]
-        if s.turn?.returnFlight != nil { l.append(L("Dönüş", "Return")) }
+        var l = [s.isOutstation ? L("Otel", "Hotel") : L("Ev", "Home"), L("Yol", "Commute"), L("İmza", "Sign-on")]
+        let extra = s.extraLegs ?? []
+        if extra.isEmpty {
+            l.append(L("Uçuş", "Flight"))
+            if s.turn?.returnFlight != nil { l.append(L("Dönüş", "Return")) }
+        } else {
+            let count = 1 + (s.turn?.returnFlight != nil ? 1 : 0) + extra.count
+            for i in 1...count { l.append(L("\(i). bacak", "Leg \(i)")) }
+        }
         return l
     }
 
@@ -484,9 +496,17 @@ struct PhaseBar: View {
         if let leave = s.leaveAt, now < leave { return 0 }
         if now < s.signOn { return 1 }
         if let dep = s.departureTime, now < dep { return 2 }
-        if let arr = s.turn?.outboundArrival, now < arr { return 3 }
-        if count > 4 { return 4 }
-        return 3
+        var idx = 3
+        if let arr = s.turn?.outboundArrival, now < arr { return idx }
+        if s.turn?.returnFlight != nil {
+            idx += 1
+            if let a = s.turn?.returnArrival, now < a { return min(idx, count - 1) }
+        }
+        for leg in s.extraLegs ?? [] {
+            idx += 1
+            if let a = leg.arrival, now < a { return min(idx, count - 1) }
+        }
+        return min(idx, count - 1)
     }
 }
 

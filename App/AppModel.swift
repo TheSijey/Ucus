@@ -31,10 +31,10 @@ final class AppModel: ObservableObject {
 
     func start(planned f: PlannedFlight) async {
         startingPlanned = f
-        await start(query: f.flight, plannedDay: f.date)
+        await start(query: f.flight, plannedDay: f.date, legs: f.legNumbers)
     }
 
-    func start(query raw: String, plannedDay: Date?) async {
+    func start(query raw: String, plannedDay: Date?, legs: [String]? = nil) async {
         AeroDataBox.clearQuotaBlock()
         if plannedDay == nil { startingPlanned = nil }
         guard !loading else { return }
@@ -43,7 +43,7 @@ final class AppModel: ObservableObject {
         defer { loading = false }
         do {
             let q = CDMFetcher.normalize(raw)
-            let state = try await FlightLoader.load(query: raw, plannedDay: plannedDay)
+            let state = try await FlightLoader.load(query: raw, plannedDay: plannedDay, legs: legs)
             if let plannedDay {
                 let departure = state.eobt ?? state.signOn.addingTimeInterval(CDMParser.signOnBeforeEOBT)
                 let cal = UTC.calendar

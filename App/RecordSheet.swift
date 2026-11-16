@@ -17,9 +17,14 @@ struct RecordRequest: Identifiable {
 
     /// Takip edilen uçuş için: varıştan sonra varış kaydı, öncesinde kalkış kaydı.
     @MainActor static func forCurrent(_ s: FlightAttributes.ContentState) -> RecordRequest {
+        if let last = s.extraLegs?.last(where: { leg in (leg.arrival ?? .distantFuture) < Date() }), !last.toICAO.isEmpty {
+            var r = RecordRequest(icao: last.toICAO, phase: .arrival, flight: s)
+            r.record.flight = last.flight
+            return r
+        }
         let returned = s.turn?.returnArrival.map { Date() > $0 } ?? false
         if returned {
-            var r = RecordRequest(icao: s.origin ?? "LTFM", phase: .arrival, flight: s)
+            var r = RecordRequest(icao: s.turn?.returnToICAO ?? s.origin ?? "LTFM", phase: .arrival, flight: s)
             if let rf = s.turn?.returnFlight { r.record.flight = rf }
             return r
         }

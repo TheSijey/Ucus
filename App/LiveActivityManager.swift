@@ -174,7 +174,7 @@ enum FlightRefresher {
         DebugLog.add("Yenile başladı \(old.flight)")
         do {
             var state = try await FlightLoader.load(query: session.query, plannedDay: old.isOutstation ? old.eobt : nil,
-                                                    outstation: old.isOutstation)
+                                                    outstation: old.isOutstation, legs: old.tripLegs)
             if state.isOutstation {
                 // İmza elle girilmediyse kalkış öne çekilince eski (geç) tahmin kalır
                 if state.signOnManual != true { state.signOn = max(old.signOn, state.signOn) }

@@ -4,7 +4,28 @@ import SwiftUI
 struct PlannedFlight: Identifiable, Codable, Hashable {
     var id = UUID()
     var date: Date      // UTC günün başlangıcı (roster'daki tarih)
-    var flight: String  // "TK1751"
+    var flight: String  // "TK1751" (ilk bacak)
+    var kind: TripKind? = nil          // nil: eski kayıt, dönüş otomatik
+    var legs: [PlannedLeg]? = nil      // ilk bacaktan sonrakiler
+
+    /// Yüklemeye gidecek bacak numaraları: nil = otomatik dönüş tahmini.
+    var legNumbers: [String]? {
+        guard kind != nil else { return nil }
+        return (legs ?? []).map(\.flight).filter { !$0.isEmpty }
+    }
+
+    /// "TK1751 · TK1752 · TK2010"
+    var summary: String { ([flight] + (legs ?? []).map(\.flight)).joined(separator: " · ") }
+}
+
+enum TripKind: String, Codable, CaseIterable {
+    case single, turn
+}
+
+struct PlannedLeg: Codable, Hashable, Identifiable {
+    var id = UUID()
+    var flight: String
+    var dayOffset: Int = 0
 }
 
 /// Roster UTC olduğu için uçuş tarihleri UTC tutulur ve gösterilir.
@@ -43,12 +64,27 @@ final class FlightStore: ObservableObject {
     }
 
     /// `date`: UTC takvimde seçilmiş gün.
-    func add(date: Date, flight raw: String) {
+    func add(date: Date, flight raw: String, kind: TripKind? = nil, legs: [PlannedLeg]? = nil) {
         let flight = Self.normalizeFlight(raw)
         guard !flight.isEmpty else { return }
         let day = UTC.startOfDay(date)
-        guard !flights.contains(where: { $0.date == day && $0.flight == flight }) else { return }
-        flights.append(PlannedFlight(date: day, flight: flight))
+        let cleanLegs = legs?.map { PlannedLeg(id: $0.id, flight: Self.normalizeFlight($0.flight), dayOffset: $0.dayOffset) }.filter { !$0.flight.isEmpty }
+        if let i = flights.firstIndex(where: { $0.date == day && $0.flight == flight }) {
+            flights[i].kind = kind
+            flights[i].legs = cleanLegs
+        } else {
+            flights.append(PlannedFlight(date: day, flight: flight, kind: kind, legs: cleanLegs))
+        }
+        save()
+    }
+
+    func update(_ f: PlannedFlight) {
+        guard let i = flights.firstIndex(where: { $0.id == f.id }) else { return }
+        var g = f
+        g.flight = Self.normalizeFlight(f.flight)
+        g.date = UTC.startOfDay(f.date)
+        g.legs = f.legs?.map { PlannedLeg(id: $0.id, flight: Self.normalizeFlight($0.flight), dayOffset: $0.dayOffset) }.filter { !$0.flight.isEmpty }
+        flights[i] = g
         save()
     }
 

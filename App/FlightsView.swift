@@ -7,6 +7,7 @@ struct FlightsView: View {
     @ObservedObject var session = FlightSession.shared
     @AppStorage(AppSettings.leaveMinutesKey) private var leaveMinutes = 60
     @State private var query = ""
+    @State private var editingFlight: PlannedFlight?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -35,12 +36,13 @@ struct FlightsView: View {
                         row(f)
                             .swipeActions {
                                 Button(L("Sil", "Delete"), role: .destructive) { store.delete(f) }
+                                Button(L("Düzenle", "Edit")) { editingFlight = f }.tint(Palette.stand)
                             }
                     }
                 } header: {
                     Text(L("Sonraki uçuşlar", "Upcoming flights"))
                 } footer: {
-                    Text(L("Silmek için sola kaydır.", "Swipe left to delete.") + (leaveMinutes > 0 ? L(" Çıkış bildirimi: imzadan \(Display.minutes(leaveMinutes)) önce.", " Leave alert: \(Display.minutes(leaveMinutes)) before sign-on.") : ""))
+                    Text(L("Düzenlemek ya da silmek için sola kaydır.", "Swipe left to edit or delete.") + (leaveMinutes > 0 ? L(" Çıkış bildirimi: imzadan \(Display.minutes(leaveMinutes)) önce.", " Leave alert: \(Display.minutes(leaveMinutes)) before sign-on.") : ""))
                 }
 
                 Section {
@@ -69,6 +71,9 @@ struct FlightsView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Palette.bg)
+            .sheet(item: $editingFlight) { f in
+                AddFlightView(editing: f) { p in store.update(p) }
+            }
             .navigationTitle(L("Uçuşlarım", "My Flights"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -108,8 +113,16 @@ struct FlightsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(dayText(f.date)).font(.caption).foregroundStyle(Palette.secondary)
                     Text(f.flight).font(.title.bold().monospaced())
+                    if let l = f.legs, !l.isEmpty {
+                        Text(f.summary).font(.caption.monospaced()).foregroundStyle(Palette.secondary)
+                    } else if f.kind == .single {
+                        Text(L("Tek bacak", "One leg")).font(.caption).foregroundStyle(Palette.secondary)
+                    }
                 }
                 Spacer()
+                Button { editingFlight = f } label: { Image(systemName: "pencil.circle").font(.title2) }
+                    .buttonStyle(.plain).foregroundStyle(Palette.stand)
+                    .accessibilityLabel(L("Uçuşu düzenle", "Edit flight"))
                 if isActive {
                     Text(L("Takip ediliyor", "Tracking")).font(.caption.bold()).foregroundStyle(Palette.outbound)
                         .padding(.horizontal, 10).padding(.vertical, 4)
@@ -148,8 +161,8 @@ struct FlightsView: View {
                 .frame(width: 44, height: 44)
                 .background(Palette.card2, in: RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(f.flight).font(.headline.monospaced())
-                    Text(dayText(f.date)).font(.caption).foregroundStyle(Palette.secondary)
+                    Text(f.legs?.isEmpty == false ? f.summary : f.flight).font(.headline.monospaced()).lineLimit(1).minimumScaleFactor(0.7)
+                    Text(dayText(f.date) + (f.kind == .single ? " · " + L("tek bacak", "one leg") : "")).font(.caption).foregroundStyle(Palette.secondary)
                 }
                 Spacer()
                 Image(systemName: "plus.circle").foregroundStyle(Palette.stand)
