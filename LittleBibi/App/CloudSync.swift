@@ -126,7 +126,7 @@ final class CloudSync: ObservableObject {
             } catch {
                 share = CKShare(recordZoneID: zid)
             }
-            share[CKShare.SystemFieldKey.title] = "LittleBibi" as CKRecordValue
+            share[CKShare.SystemFieldKey.title] = "LittleBabbi" as CKRecordValue
             // Linki alan herkes katılabilir; linki yalnızca aileyle paylaşın.
             share.publicPermission = .readWrite
             let saved = try await db.save(share)

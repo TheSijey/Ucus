@@ -269,6 +269,41 @@ final class Store: ObservableObject {
         return nil
     }
 
+    // MARK: Toplu temizlik
+
+    var hasAnyRecords: Bool {
+        !entries.isEmpty || !gifts.isEmpty || !questions.isEmpty || !measurements.isEmpty
+            || marksRaw.contains { !$0.deleted } || vitaminsRaw.contains { !$0.deleted } || nursing != nil
+    }
+
+    /// Deneme kayıtlarını siler. Silinenler "silindi" işaretiyle eşitlenir ki diğer telefondan da kalksın.
+    func clearAllRecords() {
+        let now = Date()
+        var names: [String] = []
+        func wipe<T: SyncRecord>(_ list: inout [T]) {
+            for i in list.indices where !list[i].deleted {
+                list[i].deleted = true
+                list[i].modified = now
+                names.append(list[i].recordName)
+            }
+        }
+        for i in all.indices where !all[i].deleted {
+            all[i].deleted = true
+            all[i].modified = now
+            names.append(Store.recordName(all[i].id))
+        }
+        wipe(&giftsRaw)
+        wipe(&questionsRaw)
+        wipe(&measurementsRaw)
+        wipe(&marksRaw)
+        wipe(&vitaminsRaw)
+        refresh()
+        save()
+        for name in names { CloudSync.shared.markDirty(name) }
+        if nursing != nil { setNursing(nil) }
+        Reminders.refresh(self)
+    }
+
     // MARK: Aile eşitlemesi
 
     static let profileRecordName = "profile"

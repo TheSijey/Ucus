@@ -77,7 +77,7 @@ struct OnboardingView: View {
             Form {
                 Section {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("LittleBibi'ye hoş geldiniz")
+                        Text("LittleBabbi'ye hoş geldiniz")
                             .font(.title2.bold())
                             .foregroundStyle(Theme.ink)
                         Text("Küçük anlar, büyük anılar. Başlamak için birkaç bilgi yeterli; hepsini sonra Ayarlar'dan değiştirebilirsiniz.")

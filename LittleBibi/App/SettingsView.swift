@@ -12,6 +12,8 @@ struct SettingsView: View {
     @State private var inviteLink = ""
     @State private var confirmStop = false
     @State private var confirmLeave = false
+    @State private var confirmClear = false
+    @State private var cleared = false
     @AppStorage(Reminders.scheduleKey) private var remindSchedule = false
     @AppStorage(Reminders.vitaminKey) private var remindVitamin = false
     @AppStorage(Reminders.vitaminMinutesKey) private var vitaminMinutes = 9 * 60
@@ -71,9 +73,29 @@ struct SettingsView: View {
                 } footer: {
                     Text("Dışa aktarılan dosya Excel ve Numbers ile açılır.")
                 }
+                Section {
+                    Button("Tüm kayıtları temizle", role: .destructive) { confirmClear = true }
+                        .disabled(!store.hasAnyRecords)
+                    if cleared {
+                        Text("Kayıtlar temizlendi.")
+                            .font(.footnote)
+                            .foregroundStyle(Theme.muted)
+                    }
+                } header: {
+                    Text("Temizle")
+                } footer: {
+                    Text("Bakım kayıtları, takı defteri, sorular, ölçümler, takvim ve D vitamini işaretleri silinir; eşinizin telefonundan da kalkar. Bebek adı, doğum tarihi, ayarlar ve aile paylaşımı olduğu gibi kalır.")
+                }
+                .confirmationDialog("Tüm kayıtlar iki telefondan da silinsin mi? Bu işlem geri alınamaz.", isPresented: $confirmClear, titleVisibility: .visible) {
+                    Button("Hepsini sil", role: .destructive) {
+                        store.clearAllRecords()
+                        cleared = true
+                    }
+                    Button("Vazgeç", role: .cancel) {}
+                }
                 Section("Hakkında") {
                     LabeledContent("Sürüm", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
-                    Text("LittleBibi bir kayıt aracıdır; tıbbi tavsiye vermez ve teşhis koymaz. Bebeğinizin beslenmesi, uykusu ya da sağlığıyla ilgili her soruda çocuk doktorunuza danışın.")
+                    Text("LittleBabbi bir kayıt aracıdır; tıbbi tavsiye vermez ve teşhis koymaz. Bebeğinizin beslenmesi, uykusu ya da sağlığıyla ilgili her soruda çocuk doktorunuza danışın.")
                         .font(.footnote)
                         .foregroundStyle(Theme.muted)
                 }
@@ -127,7 +149,7 @@ struct SettingsView: View {
             case .owner:
                 LabeledContent("Durum", value: cloud.state.shareURL == nil ? "iCloud'a yedekleniyor" : "Paylaşım açık")
                 if let link = cloud.state.shareURL, let url = URL(string: link) {
-                    ShareLink(item: url, message: Text("LittleBibi'de bebeğimizin kayıtlarını birlikte tutalım. Önce uygulamayı kur, sonra bu linke dokun.")) {
+                    ShareLink(item: url, message: Text("LittleBabbi'de bebeğimizin kayıtlarını birlikte tutalım. Önce uygulamayı kur, sonra bu linke dokun.")) {
                         Label("Davet linkini gönder", systemImage: "square.and.arrow.up")
                     }
                     Button("Paylaşımı durdur", role: .destructive) { confirmStop = true }
