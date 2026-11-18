@@ -14,6 +14,7 @@ final class Store: ObservableObject {
         var measurements: [Measurement]?
         var marks: [ScheduleMark]?
         var vitamins: [VitaminMark]?
+        var photos: [Photo]?
     }
 
     /// Silinmemiş kayıtlar, en yeni en üstte.
@@ -27,6 +28,7 @@ final class Store: ObservableObject {
     @Published private(set) var measurementsRaw: [Measurement] = []
     @Published private(set) var marksRaw: [ScheduleMark] = []
     @Published private(set) var vitaminsRaw: [VitaminMark] = []
+    @Published private(set) var photosRaw: [Photo] = []
     /// Ailedeki başka bir telefonda devam eden emzirme.
     @Published private(set) var remoteNursing: SharedNursing?
 
@@ -56,6 +58,7 @@ final class Store: ObservableObject {
             measurementsRaw = db.measurements ?? []
             marksRaw = db.marks ?? []
             vitaminsRaw = db.vitamins ?? []
+            photosRaw = db.photos ?? []
         }
         refresh()
         NursingActivity.sync(nursing, babyName: profile.babyName)
@@ -68,7 +71,7 @@ final class Store: ObservableObject {
 
     private func save() {
         let db = Database(profile: profile, entries: all, nursing: nursing, gifts: giftsRaw, questions: questionsRaw,
-                          measurements: measurementsRaw, marks: marksRaw, vitamins: vitaminsRaw)
+                          measurements: measurementsRaw, marks: marksRaw, vitamins: vitaminsRaw, photos: photosRaw)
         guard let data = try? JSONEncoder().encode(db) else { return }
         try? data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
@@ -77,7 +80,7 @@ final class Store: ObservableObject {
 
     func updateProfile(_ p: Profile) {
         var new = p
-        let babyChanged = new.babyName != profile.babyName || new.birthDate != profile.birthDate
+        let babyChanged = new.babyName != profile.babyName || new.birthDate != profile.birthDate || new.babySex != profile.babySex
         if babyChanged { new.babyModified = Date() }
         profile = new
         save()
@@ -219,6 +222,22 @@ final class Store: ObservableObject {
     func save(_ question: Question) { put(question, in: \.questionsRaw) }
     func remove(_ question: Question) { var q = question; q.deleted = true; put(q, in: \.questionsRaw) }
 
+    func save(_ photo: Photo) { put(photo, in: \.photosRaw) }
+    func photo(_ id: UUID) -> Photo? { photosRaw.first { $0.id == id && !$0.deleted } }
+
+    /// Soruyu ve ona bağlı fotoğrafları siler.
+    func removeWithPhotos(_ question: Question) {
+        for id in question.photos {
+            if var p = photosRaw.first(where: { $0.id == id }) {
+                p.deleted = true
+                put(p, in: \.photosRaw)
+            }
+        }
+        remove(question)
+    }
+
+    func entry(_ id: UUID) -> Entry? { entries.first { $0.id == id } }
+
     func save(_ measurement: Measurement) { put(measurement, in: \.measurementsRaw) }
     func remove(_ measurement: Measurement) { var m = measurement; m.deleted = true; put(m, in: \.measurementsRaw) }
 
@@ -273,7 +292,7 @@ final class Store: ObservableObject {
 
     var hasAnyRecords: Bool {
         !entries.isEmpty || !gifts.isEmpty || !questions.isEmpty || !measurements.isEmpty
-            || marksRaw.contains { !$0.deleted } || vitaminsRaw.contains { !$0.deleted } || nursing != nil
+            || marksRaw.contains { !$0.deleted } || vitaminsRaw.contains { !$0.deleted } || photosRaw.contains { !$0.deleted } || nursing != nil
     }
 
     /// Deneme kayıtlarını siler. Silinenler "silindi" işaretiyle eşitlenir ki diğer telefondan da kalksın.
@@ -297,6 +316,7 @@ final class Store: ObservableObject {
         wipe(&measurementsRaw)
         wipe(&marksRaw)
         wipe(&vitaminsRaw)
+        wipe(&photosRaw)
         refresh()
         save()
         for name in names { CloudSync.shared.markDirty(name) }
@@ -314,7 +334,7 @@ final class Store: ObservableObject {
     var allRecordNames: [String] {
         var names = all.map { Store.recordName($0.id) }
         names += giftsRaw.map(\.recordName) + questionsRaw.map(\.recordName) + measurementsRaw.map(\.recordName)
-        names += marksRaw.map(\.recordName) + vitaminsRaw.map(\.recordName)
+        names += marksRaw.map(\.recordName) + vitaminsRaw.map(\.recordName) + photosRaw.map(\.recordName)
         if profile.babyModified != nil { names.append(Store.profileRecordName) }
         return names
     }
@@ -328,7 +348,7 @@ final class Store: ObservableObject {
     func cloudJSON(for name: String) -> String? {
         if name == Store.profileRecordName {
             guard let modified = profile.babyModified else { return nil }
-            return encode(SharedProfile(babyName: profile.babyName, birthDate: profile.birthDate, modified: modified))
+            return encode(SharedProfile(babyName: profile.babyName, birthDate: profile.birthDate, modified: modified, babySex: profile.babySex))
         }
         if name == Store.nursingRecordName {
             return encode(SharedNursing(active: nursing, author: profile.myName, device: Store.deviceID, modified: sharedNursingModified))
@@ -340,6 +360,7 @@ final class Store: ObservableObject {
         case "m-": return encode(measurementsRaw.first { $0.recordName == name })
         case "s-": return encode(marksRaw.first { $0.recordName == name })
         case "v-": return encode(vitaminsRaw.first { $0.recordName == name })
+        case "p-": return encode(photosRaw.first { $0.recordName == name })
         default: return nil
         }
     }
@@ -371,6 +392,7 @@ final class Store: ObservableObject {
                    rp.modified > (profile.babyModified ?? .distantPast) {
                     profile.babyName = rp.babyName
                     profile.birthDate = rp.birthDate
+                    profile.babySex = rp.babySex
                     profile.babyModified = rp.modified
                     won.insert(name)
                 }
@@ -403,6 +425,7 @@ final class Store: ObservableObject {
             case "m-": if merge(record.data, as: Measurement.self, into: \.measurementsRaw) { won.insert(name) }
             case "s-": if merge(record.data, as: ScheduleMark.self, into: \.marksRaw) { won.insert(name) }
             case "v-": if merge(record.data, as: VitaminMark.self, into: \.vitaminsRaw) { won.insert(name) }
+            case "p-": if merge(record.data, as: Photo.self, into: \.photosRaw) { won.insert(name) }
             default: continue
             }
         }

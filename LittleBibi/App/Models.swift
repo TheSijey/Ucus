@@ -109,6 +109,14 @@ struct Profile: Codable, Equatable {
     var onboarded: Bool = false
     /// Bebek bilgilerinin son değiştiği an; aile eşitlemesinde hangisinin yeni olduğunu belirler.
     var babyModified: Date? = nil
+    /// DSÖ büyüme eğrileri için. Eski kayıtlarla uyum için isteğe bağlı.
+    var babySex: BabySex? = nil
+}
+
+enum BabySex: String, Codable, CaseIterable, Identifiable {
+    case girl, boy
+    var id: String { rawValue }
+    var title: String { self == .girl ? "Kız" : "Erkek" }
 }
 
 /// Profilin aileyle paylaşılan kısmı.
@@ -116,6 +124,7 @@ struct SharedProfile: Codable {
     var babyName: String
     var birthDate: Date?
     var modified: Date
+    var babySex: BabySex? = nil
 }
 
 /// Devam eden emzirme. Uygulama kapansa da kaybolmaması için diske yazılır.

@@ -61,11 +61,28 @@ struct Question: SyncRecord, Identifiable, Equatable {
     var answered: Bool = false
     var answer: String = ""
     var answeredAt: Date? = nil
+    /// Eklenen fotoğrafların kimlikleri (Photo kayıtları). Eski kayıtlarla uyum için isteğe bağlı.
+    var photoIDs: [UUID]? = nil
+    /// Soruyla ilgili bakım kaydı (ör. uzun bir uyku).
+    var linkedEntryID: UUID? = nil
     var author: String = ""
     var modified: Date = Date()
     var deleted: Bool = false
 
     var recordName: String { "q-" + id.uuidString }
+    var photos: [UUID] { photoIDs ?? [] }
+}
+
+/// Soruya eklenen fotoğraf. Küçültülmüş JPEG, base64 olarak tek kayıtta durur (iCloud kayıt sınırı 1 MB).
+struct Photo: SyncRecord, Identifiable, Equatable {
+    var id = UUID()
+    var jpegBase64: String
+    var created: Date = Date()
+    var author: String = ""
+    var modified: Date = Date()
+    var deleted: Bool = false
+
+    var recordName: String { "p-" + id.uuidString }
 }
 
 // MARK: Gelişim
@@ -161,7 +178,7 @@ enum Schedule {
         ScheduleItem(key: "m3", title: "3. ay kontrolü", detail: "Tartı ve muayene.", days: 0, months: 3),
         ScheduleItem(key: "m4", title: "4. ay kontrolü ve aşıları", detail: "Karma aşı 2. doz, KPA 2. doz.", days: 0, months: 4),
         ScheduleItem(key: "m6", title: "6. ay kontrolü ve aşıları", detail: "Karma aşı 3. doz, ağızdan çocuk felci aşısı (OPA) 1. doz.", days: 0, months: 6),
-        ScheduleItem(key: "m9", title: "9. ay kontrolü ve aşısı", detail: "KKK (kızamık, kızamıkçık, kabakulak) ek doz.", days: 0, months: 9),
+        ScheduleItem(key: "m9", title: "9. ay kontrolü ve aşısı", detail: "KKK (kızamık, kızamıkçık, kabakulak) ek doz. Bu dozun uygulanıp uygulanmayacağını aile hekiminiz söyler.", days: 0, months: 9),
         ScheduleItem(key: "m12", title: "12. ay kontrolü ve aşıları", detail: "KPA pekiştirme, KKK 1. doz, suçiçeği.", days: 0, months: 12),
         ScheduleItem(key: "m18", title: "18. ay kontrolü ve aşıları", detail: "Karma aşı pekiştirme, OPA 2. doz, Hepatit A 1. doz.", days: 0, months: 18),
         ScheduleItem(key: "m24", title: "24. ay kontrolü ve aşısı", detail: "Hepatit A 2. doz.", days: 0, months: 24),

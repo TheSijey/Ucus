@@ -6,6 +6,7 @@ struct SettingsView: View {
     @State private var myName = ""
     @State private var born = false
     @State private var birthDate = Date()
+    @State private var sex: BabySex?
     @State private var loaded = false
     @State private var exportURL: URL?
     @ObservedObject private var cloud = CloudSync.shared
@@ -26,6 +27,10 @@ struct SettingsView: View {
                     Toggle("Bebek doğdu", isOn: $born)
                     if born {
                         DatePicker("Doğum tarihi", selection: $birthDate, in: ...Date(), displayedComponents: .date)
+                    }
+                    Picker("Cinsiyet", selection: $sex) {
+                        Text("Seçilmedi").tag(BabySex?.none)
+                        ForEach(BabySex.allCases) { Text($0.title).tag(BabySex?.some($0)) }
                     }
                 }
                 Section {
@@ -118,6 +123,7 @@ struct SettingsView: View {
             .onChange(of: myName) { _, _ in commit() }
             .onChange(of: born) { _, _ in commit() }
             .onChange(of: birthDate) { _, _ in commit() }
+            .onChange(of: sex) { _, _ in commit() }
         }
     }
 
@@ -221,6 +227,7 @@ struct SettingsView: View {
         myName = p.myName
         born = p.birthDate != nil
         birthDate = p.birthDate ?? Date()
+        sex = p.babySex
         exportURL = nil
         loaded = true
     }
@@ -232,6 +239,7 @@ struct SettingsView: View {
         let name = myName.trimmingCharacters(in: .whitespaces)
         if !name.isEmpty { p.myName = name }
         p.birthDate = born ? birthDate : nil
+        p.babySex = sex
         if p != store.profile { store.updateProfile(p) }
     }
 }
