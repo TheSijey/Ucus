@@ -11,6 +11,7 @@ on:
     branches: [main]
     paths:
       - 'Varliklarim/**'
+      - '!Varliklarim/alerts/**'
       - '.github/workflows/varliklar-testflight.yml'
 
 jobs:
@@ -58,6 +59,18 @@ jobs:
           PY
 
       # İmzasız arşiv; imzayı aşağıda Apple'ın bulut sertifikası atar (Mac'te sertifika gerekmez).
+      - name: Alarm sunucusu adresi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || '160cc99709cf060de26425b57bd3594c' }}
+        run: |
+          SUB=""
+          if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            SUB=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | python3 -c "import sys,json; print((json.load(sys.stdin).get('result') or {}).get('subdomain',''))" || true)
+          fi
+          if [ -n "$SUB" ]; then echo "ALERTS_URL=https://varliklar-alerts.$SUB.workers.dev" >> "$GITHUB_ENV"; else echo "ALERTS_URL=" >> "$GITHUB_ENV"; fi
+          echo "Alarm adresi: ${SUB:-yok}"
+
       - name: Arşivle
         run: |
           xcodebuild archive \
@@ -65,7 +78,15 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Varliklarim.xcarchive" \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            ALERTS_URL="$ALERTS_URL" \
             CODE_SIGNING_ALLOWED=NO
+
+      # İmzasız arşive bildirim yetkisini geçici imzayla ekle; asıl imzayı dışa aktarma atar.
+      - name: Yetkileri ekle
+        run: |
+          APP="$RUNNER_TEMP/Varliklarim.xcarchive/Products/Applications/Varliklarim.app"
+          codesign --force --sign - --entitlements App/Varliklarim.entitlements "$APP"
+          codesign -d --entitlements - "$APP" 2>/dev/null | grep -A1 aps-environment || true
 
       - name: İmzala ve TestFlight'a yükle
         if: ${{ github.event_name == 'push' || inputs.upload }}

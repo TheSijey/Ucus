@@ -1,0 +1,83 @@
+name: Varliklarim fiyat alarmlari (Cloudflare)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Varliklarim/alerts/**'
+      - '.github/workflows/varliklar-alerts.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: APPLE_TEAM_ID
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: Varliklarim/alerts
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || '160cc99709cf060de26425b57bd3594c' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Gizli bilgiler var mı
+        env:
+          APNS_KEY_P8: ${{ secrets.APNS_KEY_P8 }}
+          APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID APNS_KEY_P8 APNS_KEY_ID APPLE_TEAM_ID; do
+            if [ -z "${!v}" ]; then echo "EKSİK: $v"; else echo "var: $v"; fi
+          done
+          [ -n "$APNS_KEY_P8" ] && [ -n "$APNS_KEY_ID" ] && echo "APNS=1" >> "$GITHUB_ENV" || echo "APNS=0" >> "$GITHUB_ENV"
+          [ -n "$CLOUDFLARE_API_TOKEN" ]
+
+      - name: KV alanı (yoksa oluştur)
+        run: |
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/storage/kv/namespaces"
+          ID=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API?per_page=100" | python3 -c "import sys,json; d=json.load(sys.stdin); print(next((n['id'] for n in d.get('result') or [] if n['title']=='varliklar-alerts'),''))")
+          if [ -z "$ID" ]; then
+            ID=$(curl -s -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" -d '{"title":"varliklar-alerts"}' "$API" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['result']['id'] if d.get('success') else ''); print(d.get('errors'), file=sys.stderr)")
+          fi
+          [ -n "$ID" ] || { echo "KV oluşturulamadı"; exit 1; }
+          sed -i "s/KV_ID_PLACEHOLDER/$ID/" wrangler.toml
+          echo "KV: $ID"
+
+      - name: workers.dev alt alan adı (yoksa oluştur)
+        run: |
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain"
+          R=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API")
+          echo "$R" | python3 -c "import sys,json; d=json.load(sys.stdin); print('mevcut:', (d.get('result') or {}).get('subdomain'), d.get('errors'))"
+          SUB=$(echo "$R" | python3 -c "import sys,json; print((json.load(sys.stdin).get('result') or {}).get('subdomain') or '')")
+          if [ -z "$SUB" ]; then
+            NEW="varliklar-$(echo $CLOUDFLARE_ACCOUNT_ID | cut -c1-6)"
+            curl -s -X PUT -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" -d "{\"subdomain\":\"$NEW\"}" "$API" | python3 -c "import sys,json; d=json.load(sys.stdin); print('oluşturuldu:', d.get('success'), d.get('result'), d.get('errors'))"
+          fi
+
+      - name: Yayınla
+        run: |
+          npx --yes wrangler@4 deploy || { echo "Tekrar deneniyor..."; sleep 20; npx --yes wrangler@4 deploy; }
+
+      - name: Gizli bilgileri yükle
+        if: env.APNS == '1'
+        env:
+          APNS_KEY_P8: ${{ secrets.APNS_KEY_P8 }}
+          APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          python3 -c "import os,json; print(json.dumps({k: os.environ[k] for k in ['APNS_KEY_P8','APNS_KEY_ID','APPLE_TEAM_ID']}))" > "$RUNNER_TEMP/s.json"
+          npx --yes wrangler@4 secret bulk "$RUNNER_TEMP/s.json"
+          rm -f "$RUNNER_TEMP/s.json"
+
+      - name: Adres ve deneme
+        run: |
+          SUB=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['subdomain'])")
+          URL="https://varliklar-alerts.$SUB.workers.dev"
+          echo "Adres: $URL"
+          sleep 5
+          curl -s "$URL/prices" || true

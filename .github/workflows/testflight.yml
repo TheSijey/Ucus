@@ -12,6 +12,7 @@ on:
     paths-ignore:
       - 'Varliklarim/**'
       - '.github/workflows/varliklar-testflight.yml'
+      - '.github/workflows/varliklar-alerts.yml'
       - '.github/workflows/testflight.yml'
 
 jobs:

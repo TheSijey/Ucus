@@ -1,0 +1,15 @@
+name = "varliklar-alerts"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+BUNDLE_ID = "com.cengiz.varliklar"
+FIREBASE_API_KEY = "AIzaSyBd4INdzdZEefvUFR0BAsVwJ9cE7taWg2w"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[kv_namespaces]]
+binding = "ALERTS"
+id = "KV_ID_PLACEHOLDER"
