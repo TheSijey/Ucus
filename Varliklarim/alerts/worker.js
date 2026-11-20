@@ -228,10 +228,17 @@ async function handle(req, env) {
       const res = await push(env, u.devices || [], lang === 'en' ? 'Test notification' : 'Deneme bildirimi',
         lang === 'en' ? 'Price alerts are working.' : 'Fiyat alarmları çalışıyor.');
       const fails = res.results.filter(r => r.status !== 200);
+      // Teşhis: üretim ortamı jetonu reddederse aynı jetonu deneme (sandbox) ortamında da dene
+      let diag = '';
+      if (fails.some(f => f.reason === 'InvalidProviderToken') && (u.devices || []).length) {
+        const sb = await push(env, [{ token: u.devices[0].token, sandbox: true }], 'Deneme', 'sandbox');
+        const r0 = sb.results[0] || {};
+        diag = ' | sandbox: ' + r0.status + ' ' + (r0.reason || '') + ' | kid ' + String(env.APNS_KEY_ID).slice(0, 2) + '… team ' + String(env.APPLE_TEAM_ID).slice(0, 2) + '…';
+      }
       await env.ALERTS.put('apns-last', JSON.stringify({ at: new Date().toISOString(), results: res.results }));
       if (fails.length) {
         const why = fails.map(f => f.status + ' ' + (f.reason || '')).join(', ');
-        return json({ error: (lang === 'en' ? 'Apple rejected the notification: ' : 'Apple bildirimi reddetti: ') + why, results: res.results });
+        return json({ error: (lang === 'en' ? 'Apple rejected the notification: ' : 'Apple bildirimi reddetti: ') + why + diag, results: res.results });
       }
       return json({ ok: true, sent: (u.devices || []).length, results: res.results });
     }
