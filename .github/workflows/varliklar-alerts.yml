@@ -3,7 +3,7 @@ name: Varliklarim fiyat alarmlari (Cloudflare)
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, alarms]
     paths:
       - 'Varliklarim/alerts/**'
       - '.github/workflows/varliklar-alerts.yml'
@@ -31,11 +31,11 @@ jobs:
           APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          ok=1
           for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID APNS_KEY_P8 APNS_KEY_ID APPLE_TEAM_ID; do
-            if [ -z "${!v}" ]; then echo "EKSİK: $v"; ok=0; else echo "var: $v"; fi
+            if [ -z "${!v}" ]; then echo "EKSİK: $v"; else echo "var: $v"; fi
           done
-          [ $ok = 1 ]
+          [ -n "$APNS_KEY_P8" ] && [ -n "$APNS_KEY_ID" ] && echo "APNS=1" >> "$GITHUB_ENV" || echo "APNS=0" >> "$GITHUB_ENV"
+          [ -n "$CLOUDFLARE_API_TOKEN" ]
 
       - name: KV alanı (yoksa oluştur)
         run: |
@@ -52,6 +52,7 @@ jobs:
         run: npx --yes wrangler@4 deploy
 
       - name: Gizli bilgileri yükle
+        if: env.APNS == '1'
         env:
           APNS_KEY_P8: ${{ secrets.APNS_KEY_P8 }}
           APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
