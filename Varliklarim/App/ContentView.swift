@@ -978,6 +978,8 @@ final class Store: ObservableObject {
         syncError = nil
     }
 
+    func freshToken() async throws -> String { try await token() }
+
     private func token() async throws -> String {
         guard var s = session else { throw CloudError.message(L("Giriş gerekli", "Sign-in required")) }
         if s.expires.timeIntervalSinceNow < 120 {
@@ -1819,6 +1821,8 @@ struct SettingsView: View {
                 LangCard()
 
                 LockCard(lock: lock, store: store)
+
+                AlertsCard(store: store)
 
                 Card {
                     VStack(alignment: .leading, spacing: 12) {
