@@ -177,9 +177,10 @@ enum FlightHelpers {
     /// Turun bütün meydanları (ara bacaklar dahil), sırayla.
     static func allAirports(_ s: FlightAttributes.ContentState) -> [String] {
         var list = airports(s)
-        for c in [s.turn?.returnToICAO] + (s.extraLegs ?? []).flatMap({ [$0.fromICAO, $0.toICAO] }) {
-            if let c, !c.isEmpty, !list.contains(c) { list.append(c) }
-        }
+        var codes: [String] = []
+        if let r = s.turn?.returnToICAO { codes.append(r) }
+        for leg in s.extraLegs ?? [] { codes.append(leg.fromICAO); codes.append(leg.toICAO) }
+        for c in codes where !c.isEmpty && !list.contains(c) { list.append(c) }
         return list
     }
 
