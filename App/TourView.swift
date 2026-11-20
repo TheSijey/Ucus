@@ -36,7 +36,7 @@ struct TourScreen: View {
                     }
                     .padding(16)
                 } else {
-                    EmptyFlightView().padding(.top, 60)
+                    EmptyFlightView().padding(.top, 60).frame(maxWidth: .infinity)
                 }
             }
             .background(Palette.bg)

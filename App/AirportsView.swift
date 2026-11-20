@@ -89,7 +89,8 @@ struct AirportsView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Palette.bg)
-            .searchable(text: $search, prompt: L("Kod ya da şehir (LHR, London)", "Code or city (LHR, London)"))
+            .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: L("Kod ya da şehir (LHR, London)", "Code or city (LHR, London)"))
             .autocorrectionDisabled()
             .navigationTitle(L("Meydanlar", "Airports"))
             .navigationDestination(for: String.self) { AirportDetailView(icao: $0) }

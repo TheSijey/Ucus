@@ -55,7 +55,7 @@ struct BriefingView: View {
                         PresentationView(state: s, notes: notes)
                     }
                 } else {
-                    EmptyFlightView().padding(.top, 60)
+                    EmptyFlightView().padding(.top, 60).frame(maxWidth: .infinity)
                 }
             }
             .scrollDismissesKeyboard(.interactively)

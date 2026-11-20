@@ -478,12 +478,14 @@ struct WeatherView: View {
                     }
                 }
                 .padding(16)
+                .frame(maxWidth: .infinity)   // içerik dar olsa da ekranın tamamını kaplasın
             }
             .background(Palette.bg)
-            .searchable(text: $search, prompt: L("Başka meydan: kod ya da şehir", "Other airport: code or city"))
+            .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: L("Başka meydan: kod ya da şehir", "Other airport: code or city"))
             .autocorrectionDisabled()
             .navigationDestination(for: String.self) { icao in
-                ScrollView { WeatherSection(fixed: icao).padding(16) }
+                ScrollView { WeatherSection(fixed: icao).padding(16).frame(maxWidth: .infinity) }
                     .background(Palette.bg)
                     .navigationTitle(AirportDB.city(icao: icao).map { "\(icao) · \($0)" } ?? icao)
                     .toolbar {
