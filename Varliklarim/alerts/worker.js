@@ -2,7 +2,9 @@
 // 5 dakikada bir fiyatlara bakar, hedefe gelen alarm için iPhone'a bildirim (APNs) gönderir.
 // Alarmlar KV'de hesap (Firebase uid) başına tutulur; uygulama Firebase oturum anahtarıyla okur/yazar.
 
-const METRICS = ['gram', 'ons', 'usd', 'eur', 'gbp'];
+const METRICS = ['gram', 'ons', 'usd', 'eur', 'gbp', 'sym'];
+const SYM_RE = /^[A-Za-z0-9.\-=^]{1,24}$/;
+const CUR_SIGN = { TRY: '₺', USD: '$', EUR: '€', GBP: '£' };
 const NAMES = {
   tr: { gram: 'Gram altın', ons: 'Ons altın', usd: 'Dolar/TL', eur: 'Euro/TL', gbp: 'Sterlin/TL' },
   en: { gram: 'Gold gram', ons: 'Gold ounce', usd: 'USD/TRY', eur: 'EUR/TRY', gbp: 'GBP/TRY' },
@@ -21,6 +23,18 @@ async function yahoo(sym) {
   const p = j?.chart?.result?.[0]?.meta?.regularMarketPrice;
   if (!(p > 0)) throw new Error('yahoo boş');
   return p;
+}
+
+async function yahooQuote(sym) {
+  const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1m&range=1d`,
+    { headers: { 'user-agent': 'Mozilla/5.0' } });
+  if (!r.ok) throw new Error('yahoo ' + r.status);
+  const j = await r.json();
+  const m = j?.chart?.result?.[0]?.meta;
+  let p = m?.regularMarketPrice, cur = m?.currency || '';
+  if (!(p > 0)) throw new Error('yahoo boş');
+  if (cur === 'GBp' || cur === 'GBX') { p = p / 100; cur = 'GBP'; }
+  return { p, cur, name: m?.shortName || m?.longName || sym };
 }
 
 async function getPrices() {
@@ -69,7 +83,9 @@ function cleanAlerts(list) {
     firedAt: a.firedAt || null,
     firedPrice: a.firedPrice ?? null,
     lang: a.lang === 'en' ? 'en' : 'tr',
-  })).filter(a => a.value > 0);
+    symbol: a.metric === 'sym' && SYM_RE.test(String(a.symbol || '')) ? String(a.symbol).toUpperCase() : null,
+    name: a.metric === 'sym' ? String(a.name || '').slice(0, 60) : null,
+  })).filter(a => a.value > 0 && (a.metric !== 'sym' || a.symbol));
 }
 
 // ---------- APNs ----------
@@ -116,9 +132,9 @@ async function push(env, devices, title, body) {
 }
 
 const fmt = (v, lang) => v.toLocaleString(lang === 'en' ? 'en-US' : 'tr-TR', { maximumFractionDigits: v < 100 ? 4 : 0 });
-function alertText(a, price) {
-  const n = NAMES[a.lang][a.metric];
-  const unit = a.metric === 'ons' ? '$' : '₺';
+function alertText(a, price, cur) {
+  const n = a.metric === 'sym' ? (a.name || a.symbol) : NAMES[a.lang][a.metric];
+  const unit = a.metric === 'sym' ? (CUR_SIGN[cur] || '') : a.metric === 'ons' ? '$' : '₺';
   if (a.lang === 'en') {
     return { title: `${n} ${a.dir === 'above' ? 'rose above' : 'fell below'} ${unit}${fmt(a.value, 'en')}`, body: `Now ${unit}${fmt(price, 'en')}` };
   }
@@ -128,29 +144,43 @@ function alertText(a, price) {
 // ---------- Zamanlanmış kontrol ----------
 async function check(env) {
   const prices = await getPrices();
-  await env.ALERTS.put('prices', JSON.stringify(prices));
+  const users = [];
   let cursor;
   do {
     const page = await env.ALERTS.list({ prefix: 'u:', cursor });
     for (const k of page.keys) {
       const u = await env.ALERTS.get(k.name, 'json');
-      if (!u) continue;
-      let changed = false;
-      for (const a of u.alerts) {
-        if (!a.active) continue;
-        const p = prices[a.metric];
-        const hit = a.dir === 'above' ? p >= a.value : p <= a.value;
-        if (!hit) continue;
-        const t = alertText(a, p);
-        const res = await push(env, u.devices || [], t.title, t.body);
-        if (res.bad.length) u.devices = (u.devices || []).filter(d => !res.bad.includes(d.token));
-        a.active = false; a.firedAt = prices.at; a.firedPrice = p;
-        changed = true;
-      }
-      if (changed) { u.updated = prices.at; await env.ALERTS.put(k.name, JSON.stringify(u)); }
+      if (u) users.push([k.name, u]);
     }
     cursor = page.list_complete ? null : page.cursor;
   } while (cursor);
+  // Kullanıcıların kendi eklediği semboller
+  const syms = new Set();
+  for (const [, u] of users) for (const a of u.alerts || []) if (a.metric === 'sym' && a.symbol) syms.add(a.symbol);
+  prices.syms = {};
+  for (const sym of [...syms].slice(0, 40)) {
+    try { const q = await yahooQuote(sym); prices.syms[sym] = { p: q.p, cur: q.cur }; } catch (_) {}
+  }
+  await env.ALERTS.put('prices', JSON.stringify(prices));
+  for (const [key, u] of users) {
+    let changed = false;
+    for (const a of u.alerts || []) {
+      if (!a.active) continue;
+      let p = prices[a.metric], cur = '';
+      if (a.metric === 'sym') { const q = prices.syms[a.symbol]; if (!q) continue; p = q.p; cur = q.cur; }
+      if (!(p > 0)) continue;
+      const hit = a.dir === 'above' ? p >= a.value : p <= a.value;
+      if (!hit) continue;
+      const t = alertText(a, p, cur);
+      try {
+        const res = await push(env, u.devices || [], t.title, t.body);
+        if (res.bad.length) u.devices = (u.devices || []).filter(d => !res.bad.includes(d.token));
+      } catch (e) { console.log('push hata', String(e)); }
+      a.active = false; a.firedAt = prices.at; a.firedPrice = p;
+      changed = true;
+    }
+    if (changed) { u.updated = prices.at; await env.ALERTS.put(key, JSON.stringify(u)); }
+  }
 }
 
 export default {
@@ -159,6 +189,13 @@ export default {
   },
 
   async fetch(req, env) {
+    try { return await handle(req, env); }
+    catch (e) { return json({ error: 'Sunucu hatası: ' + (e && e.message ? e.message : String(e)) }, 500); }
+  },
+};
+
+async function handle(req, env) {
+  {
     if (req.method === 'OPTIONS') return json({});
     const url = new URL(req.url);
     if (req.method === 'GET' && url.pathname === '/prices') {
@@ -180,6 +217,12 @@ export default {
     }
     if (url.pathname === '/alerts' && Array.isArray(b.alerts)) { u.alerts = cleanAlerts(b.alerts); dirty = true; }
     if (dirty) await saveUser(env, uid, u);
+    if (url.pathname === '/quote') {
+      const sym = String(b.symbol || '').toUpperCase();
+      if (!SYM_RE.test(sym)) return json({ error: 'sembol' }, 400);
+      const q = await yahooQuote(sym);
+      return json({ quote: { symbol: sym, p: q.p, cur: q.cur, name: q.name } });
+    }
     if (url.pathname === '/test') {
       const lang = b.lang === 'en' ? 'en' : 'tr';
       const res = await push(env, u.devices || [], lang === 'en' ? 'Test notification' : 'Deneme bildirimi',
@@ -189,5 +232,5 @@ export default {
     }
     const prices = (await env.ALERTS.get('prices', 'json')) || null;
     return json({ alerts: u.alerts, devices: (u.devices || []).length, prices });
-  },
-};
+  }
+}
