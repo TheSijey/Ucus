@@ -13,6 +13,23 @@ struct PriceAlert: Codable, Identifiable, Equatable {
     var firedAt: String?
     var firedPrice: Double?
     var lang: String
+    var symbol: String?
+    var name: String?
+}
+
+struct SymQuote: Codable {
+    var p: Double
+    var cur: String
+}
+
+func curSign(_ c: String) -> String {
+    switch c.uppercased() {
+    case "TRY": return "₺"
+    case "USD": return "$"
+    case "EUR": return "€"
+    case "GBP": return "£"
+    default: return ""
+    }
 }
 
 struct AlertPrices: Codable {
@@ -22,6 +39,7 @@ struct AlertPrices: Codable {
     var eur: Double
     var gbp: Double
     var at: String?
+    var syms: [String: SymQuote]?
 
     func value(_ m: String) -> Double {
         switch m {
@@ -35,15 +53,16 @@ struct AlertPrices: Codable {
 }
 
 enum AlertMetric: String, CaseIterable, Identifiable {
-    case gram, ons, usd, eur, gbp
+    case gram, ons, usd, eur, gbp, sym
     var id: String { rawValue }
     var label: String {
         switch self {
         case .gram: return L("Gram altın", "Gold gram")
-        case .ons: return L("Ons altın", "Gold ounce")
+        case .ons: return L("Ons altın (dolar)", "Gold ounce (USD)")
         case .usd: return L("Dolar/TL", "USD/TRY")
         case .eur: return L("Euro/TL", "EUR/TRY")
         case .gbp: return L("Sterlin/TL", "GBP/TRY")
+        case .sym: return L("Başka bir değer (hisse, kripto, gümüş...)", "Other (stock, crypto, silver...)")
         }
     }
     var symbol: String { self == .ons ? "$" : "₺" }
@@ -63,6 +82,14 @@ struct AlertsReply: Decodable {
     var prices: AlertPrices?
     var sent: Int?
     var error: String?
+    var quote: QuoteReply?
+}
+
+struct QuoteReply: Decodable {
+    var symbol: String
+    var p: Double
+    var cur: String
+    var name: String?
 }
 
 enum AlertsAPI {
@@ -80,8 +107,12 @@ enum AlertsAPI {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, resp) = try await URLSession.shared.data(for: req)
-        let r = try JSONDecoder().decode(AlertsReply.self, from: data)
-        if let http = resp as? HTTPURLResponse, http.statusCode == 401 {
+        let code: Int = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard let r = try? JSONDecoder().decode(AlertsReply.self, from: data) else {
+            let txt: String = String(data: data.prefix(160), encoding: .utf8) ?? ""
+            throw CloudError.message(L("Sunucu yanıtı okunamadı (HTTP \(code)). \(txt)", "Could not read the server reply (HTTP \(code)). \(txt)"))
+        }
+        if code == 401 {
             throw CloudError.message(L("Oturum doğrulanamadı, çıkış yapıp tekrar gir.", "Session could not be verified; sign out and in again."))
         }
         if let e = r.error { throw CloudError.message(e) }
@@ -149,11 +180,45 @@ final class AlertsModel: ObservableObject {
         }
     }
 
-    func add(metric: AlertMetric, dir: AlertDir, value: Double) async {
+    func add(metric: AlertMetric, dir: AlertDir, value: Double, symbol: String? = nil, name: String? = nil) async {
         let lang: String = isEnglish() ? "en" : "tr"
         let a = PriceAlert(id: UUID().uuidString, metric: metric.rawValue, dir: dir.rawValue,
-                           value: value, active: true, firedAt: nil, firedPrice: nil, lang: lang)
+                           value: value, active: true, firedAt: nil, firedPrice: nil, lang: lang,
+                           symbol: symbol, name: name)
         await save(alerts + [a])
+    }
+
+    func quote(_ symbol: String) async -> QuoteReply? {
+        guard var b = try? await base() else { return nil }
+        b["symbol"] = symbol
+        return (try? await AlertsAPI.call("/quote", b))?.quote
+    }
+
+    /// Yahoo'da her türlü değeri arar: hisse, döviz, kripto, emtia, endeks
+    func search(_ q: String) async -> [StockHit] {
+        let text = q.trimmingCharacters(in: .whitespaces)
+        if text.count < 2 { return [] }
+        var comps = URLComponents(string: "https://query2.finance.yahoo.com/v1/finance/search")!
+        comps.queryItems = [
+            URLQueryItem(name: "q", value: text),
+            URLQueryItem(name: "quotesCount", value: "12"),
+            URLQueryItem(name: "newsCount", value: "0")
+        ]
+        guard let url = comps.url else { return [] }
+        var req = URLRequest(url: url)
+        req.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+        guard let (data, _) = try? await URLSession.shared.data(for: req),
+              let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let quotes = o["quotes"] as? [[String: Any]] else { return [] }
+        var out: [StockHit] = []
+        for qd in quotes {
+            guard let sym = qd["symbol"] as? String else { continue }
+            let name: String = (qd["shortname"] as? String) ?? (qd["longname"] as? String) ?? sym
+            let type: String = (qd["typeDisp"] as? String) ?? (qd["quoteType"] as? String) ?? ""
+            let ex: String = (qd["exchDisp"] as? String) ?? ""
+            out.append(StockHit(symbol: sym, name: name, exchange: [type, ex].filter { !$0.isEmpty }.joined(separator: " · ")))
+        }
+        return out
     }
 
     func toggle(_ a: PriceAlert) async {
@@ -185,28 +250,54 @@ final class AlertsModel: ObservableObject {
 }
 
 func alertNum(_ v: Double, _ m: String) -> String {
-    let digits: Int = (m == "gram" || m == "ons") ? 0 : 4
+    var digits: Int = (m == "gram" || m == "ons") ? 0 : 4
+    if m == "sym" { digits = v >= 1000 ? 0 : (v >= 1 ? 2 : 6) }
     return v.formatted(.number.precision(.fractionLength(0...digits)))
 }
 
 struct AlertRow: View {
     let alert: PriceAlert
-    let price: Double?
+    let prices: AlertPrices?
     let onToggle: () -> Void
 
     private var metric: AlertMetric { AlertMetric(rawValue: alert.metric) ?? .gram }
     private var dir: AlertDir { AlertDir(rawValue: alert.dir) ?? .above }
 
+    private var symQuote: SymQuote? {
+        guard metric == .sym, let s = alert.symbol else { return nil }
+        return prices?.syms?[s]
+    }
+
+    private var sign: String {
+        if metric == .sym { return curSign(symQuote?.cur ?? "") }
+        return metric.symbol
+    }
+
+    private var name: String {
+        if metric == .sym {
+            let n: String = alert.name ?? ""
+            return n.isEmpty ? (alert.symbol ?? "") : n
+        }
+        return metric.label
+    }
+
+    private var price: Double? {
+        if metric == .sym { return symQuote?.p }
+        return prices?.value(alert.metric)
+    }
+
     private var title: String {
-        "\(metric.label) · \(dir.label) \(metric.symbol)\(alertNum(alert.value, alert.metric))"
+        "\(name) · \(dir.label) \(sign)\(alertNum(alert.value, alert.metric))"
     }
 
     private var detail: String {
         if let fp = alert.firedPrice, !alert.active {
-            return L("Gerçekleşti: \(metric.symbol)\(alertNum(fp, alert.metric))", "Triggered at \(metric.symbol)\(alertNum(fp, alert.metric))")
+            return L("Gerçekleşti: \(sign)\(alertNum(fp, alert.metric))", "Triggered at \(sign)\(alertNum(fp, alert.metric))")
         }
-        guard let p = price else { return "" }
-        return L("Şu an \(metric.symbol)\(alertNum(p, alert.metric))", "Now \(metric.symbol)\(alertNum(p, alert.metric))")
+        guard let p = price else {
+            return metric == .sym ? L("Fiyat ilk kontrolde gelecek", "Price arrives at the next check") : ""
+        }
+        return L("Şu an \(sign)\(alertNum(p, alert.metric))", "Now \(sign)\(alertNum(p, alert.metric))")
     }
 
     private var binding: Binding<Bool> {
@@ -231,12 +322,20 @@ struct AlertsView: View {
     @State private var metric: AlertMetric = .gram
     @State private var dir: AlertDir = .below
     @State private var valueStr = ""
+    @State private var query = ""
+    @State private var hits: [StockHit] = []
+    @State private var picked: StockHit?
+    @State private var pickedQuote: QuoteReply?
 
     init(store: Store) {
         _model = StateObject(wrappedValue: AlertsModel(store: store))
     }
 
     private var currentText: String {
+        if metric == .sym {
+            guard let q = pickedQuote else { return "" }
+            return L("Şu an \(curSign(q.cur))\(alertNum(q.p, "sym"))", "Now \(curSign(q.cur))\(alertNum(q.p, "sym"))")
+        }
         guard let p = model.prices?.value(metric.rawValue) else { return "" }
         return L("Şu an \(metric.symbol)\(alertNum(p, metric.rawValue))", "Now \(metric.symbol)\(alertNum(p, metric.rawValue))")
     }
@@ -246,6 +345,7 @@ struct AlertsView: View {
             Picker(L("Ne", "What"), selection: $metric) {
                 ForEach(AlertMetric.allCases) { Text($0.label).tag($0) }
             }
+            if metric == .sym { symbolPicker }
             Picker(L("Ne zaman", "When"), selection: $dir) {
                 ForEach(AlertDir.allCases) { Text($0.label).tag($0) }
             }
@@ -262,9 +362,50 @@ struct AlertsView: View {
             Button(L("Alarm ekle", "Add alert")) {
                 let v: Double = numTR(valueStr)
                 valueStr = ""
-                Task { await model.add(metric: metric, dir: dir, value: v) }
+                let s: String? = metric == .sym ? picked?.symbol : nil
+                let n: String? = metric == .sym ? picked?.name : nil
+                Task { await model.add(metric: metric, dir: dir, value: v, symbol: s, name: n) }
             }
-            .disabled(numTR(valueStr) <= 0 || model.busy)
+            .disabled(!canAdd)
+        }
+    }
+
+    private var canAdd: Bool {
+        if numTR(valueStr) <= 0 || model.busy { return false }
+        if metric == .sym && picked == nil { return false }
+        return true
+    }
+
+    @ViewBuilder private var symbolPicker: some View {
+        if let p = picked {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(p.name).font(.subheadline.weight(.semibold))
+                    Text(p.symbol).font(.caption).foregroundStyle(Theme.muted)
+                }
+                Spacer()
+                Button(L("Değiştir", "Change")) {
+                    picked = nil
+                    pickedQuote = nil
+                }
+            }
+        } else {
+            TextField(L("Ara: THY, bitcoin, gümüş, BIST 100...", "Search: Apple, bitcoin, silver, S&P 500..."), text: $query)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            ForEach(hits) { h in
+                Button {
+                    picked = h
+                    hits = []
+                    query = ""
+                    Task { pickedQuote = await model.quote(h.symbol) }
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(h.name).lineLimit(1)
+                        Text("\(h.symbol) · \(h.exchange)").font(.caption).foregroundStyle(Theme.muted).lineLimit(1)
+                    }
+                }
+            }
         }
     }
 
@@ -274,7 +415,7 @@ struct AlertsView: View {
                 Text(L("Henüz alarm yok.", "No alerts yet.")).foregroundStyle(Theme.muted)
             }
             ForEach(model.alerts) { a in
-                AlertRow(alert: a, price: model.prices?.value(a.metric)) {
+                AlertRow(alert: a, prices: model.prices) {
                     Task { await model.toggle(a) }
                 }
                 .swipeActions {
@@ -322,6 +463,14 @@ struct AlertsView: View {
                 await model.load()
             }
             .refreshable { await model.load() }
+            .task(id: query) {
+                let q: String = query
+                if q.trimmingCharacters(in: .whitespaces).count < 2 { hits = []; return }
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                if Task.isCancelled { return }
+                let r: [StockHit] = await model.search(q)
+                if !Task.isCancelled { hits = r }
+            }
             .onReceive(NotificationCenter.default.publisher(for: .apnsToken)) { _ in
                 Task { await model.load() }
             }
