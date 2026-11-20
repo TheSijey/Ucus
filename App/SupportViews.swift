@@ -28,6 +28,7 @@ enum UTCFormat {
 struct AddFlightView: View {
     @Environment(\.dismiss) private var dismiss
     var editing: PlannedFlight? = nil
+    var onDelete: ((PlannedFlight) -> Void)? = nil
     let onSave: (PlannedFlight) -> Void
 
     struct Row: Identifiable, Equatable {
@@ -71,13 +72,14 @@ struct AddFlightView: View {
                     .onChange(of: kind) { _, k in applyKind(k) }
 
                     legField(title: L("1. bacak", "Leg 1"), text: $first, nextDay: nil, autoBadge: false, previous: nil, focus: true)
-                    ForEach($rows) { $row in
-                        let i = rows.firstIndex { $0.id == row.id } ?? 0
+                    // Satırlar kimlikle bağlanır: bir satır silinince (git-gel → tek bacak) eski sıra numarasına erişilip çökmesin
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                        let id = row.id
                         legField(title: kind == .turn && i == 0 ? L("Dönüş", "Return") : L("\(i + 2). bacak", "Leg \(i + 2)"),
-                                 text: $row.flight, nextDay: $row.nextDay, autoBadge: row.auto,
-                                 previous: i == 0 ? first : rows[i - 1].flight,
-                                 onDelete: kind == .turn && i == 0 ? nil : { rows.removeAll { $0.id == row.id } },
-                                 onEdit: { row.auto = false })
+                                 text: rowBinding(id, \.flight, ""), nextDay: rowBinding(id, \.nextDay, false), autoBadge: row.auto,
+                                 previous: i == 0 ? first : (rows.indices.contains(i - 1) ? rows[i - 1].flight : first),
+                                 onDelete: kind == .turn && i == 0 ? nil : { rows.removeAll { $0.id == id } },
+                                 onEdit: { if let j = rows.firstIndex(where: { $0.id == id }) { rows[j].auto = false } })
                     }
                     Button { rows.append(Row()) } label: {
                         Label(L("Bacak ekle", "Add leg"), systemImage: "plus.circle")
@@ -89,6 +91,16 @@ struct AddFlightView: View {
                            "For out-and-back the return flight is suggested automatically; type over it if wrong. If you fly more legs that day, use \"Add leg\". Each flight's route and time appear below it."))
                 }
 
+                if let f = editing, let onDelete {
+                    Section {
+                        Button(L("Uçuşu sil", "Delete flight"), role: .destructive) {
+                            onDelete(f)
+                            dismiss()
+                        }
+                    } footer: {
+                        Text(L("İptal olan ya da yanlış eklenen uçuşu listeden kaldırır.", "Removes a cancelled or wrongly added flight from the list."))
+                    }
+                }
                 if !added.isEmpty {
                     Section(L("Eklenenler", "Added")) {
                         ForEach(added, id: \.self) { Text($0) }
@@ -172,6 +184,11 @@ struct AddFlightView: View {
 
     // MARK: Mantık
 
+    private func rowBinding<T>(_ id: UUID, _ kp: WritableKeyPath<Row, T>, _ fallback: T) -> Binding<T> {
+        Binding(get: { rows.first { $0.id == id }?[keyPath: kp] ?? fallback },
+                set: { v in if let j = rows.firstIndex(where: { $0.id == id }) { rows[j][keyPath: kp] = v } })
+    }
+
     private func key(_ n: String, _ day: Date) -> String { "\(n)|\(day.timeIntervalSince1970)" }
     private func legDay(_ next: Bool) -> Date {
         let d = UTC.startOfDay(date)
@@ -216,7 +233,7 @@ struct AddFlightView: View {
         if k == .turn, rows.first?.auto != true, rows.first.map({ !$0.flight.isEmpty }) != true {
             if rows.isEmpty { rows = [Row(auto: true)] } else { rows[0].auto = true }
         }
-        if k == .single, rows.first?.auto == true { rows.removeFirst() }
+        if k == .single, rows.first?.auto == true { rows.remove(at: 0) }
     }
 
     private func loadEditing() {

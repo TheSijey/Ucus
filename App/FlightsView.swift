@@ -22,6 +22,14 @@ struct FlightsView: View {
                         nextCard(next)
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
+                            .swipeActions {
+                                Button(L("Sil", "Delete"), role: .destructive) { store.delete(next) }
+                                Button(L("Düzenle", "Edit")) { editingFlight = next }.tint(Palette.stand)
+                            }
+                            .contextMenu {
+                                Button { editingFlight = next } label: { Label(L("Düzenle", "Edit"), systemImage: "pencil") }
+                                Button(role: .destructive) { store.delete(next) } label: { Label(L("Sil", "Delete"), systemImage: "trash") }
+                            }
                     } header: {
                         Text(L("Sıradaki", "Next"))
                     }
@@ -72,7 +80,7 @@ struct FlightsView: View {
             .scrollContentBackground(.hidden)
             .background(Palette.bg)
             .sheet(item: $editingFlight) { f in
-                AddFlightView(editing: f) { p in store.update(p) }
+                AddFlightView(editing: f, onDelete: { store.delete($0) }) { p in store.update(p) }
             }
             .navigationTitle(L("Uçuşlarım", "My Flights"))
             .toolbar {
