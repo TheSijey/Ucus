@@ -97,7 +97,7 @@ async function apnsJWT(env) {
   const cached = await env.ALERTS.get('apns-jwt', 'json');
   const now = Math.floor(Date.now() / 1000);
   if (cached && now - cached.iat < 3000) return cached.jwt;
-  const body = String(env.APNS_KEY_P8).replace(/-----(BEGIN|END)[A-Z ]*-----/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
+  const body = String(env.APNS_KEY_P8).replace(/(BEGIN|END)[\s\w]*?KEY/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
   const der = Uint8Array.from(atob(body), c => c.charCodeAt(0));
   const key = await crypto.subtle.importKey('pkcs8', der, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
   const head = b64urlStr(JSON.stringify({ alg: 'ES256', kid: env.APNS_KEY_ID }));
