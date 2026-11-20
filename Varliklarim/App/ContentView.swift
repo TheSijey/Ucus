@@ -821,6 +821,37 @@ final class Store: ObservableObject {
         return usd(a) - a.cost / r.tryPerUSD
     }
 
+    /// Kâr/zarar yüzdesi (maliyete göre)
+    func plPct(_ a: Asset) -> Double? {
+        guard a.cost > 0, let r = rates else { return nil }
+        let c: Double = a.cost / r.tryPerUSD
+        return (usd(a) - c) / c * 100
+    }
+
+    /// Bir birimin güncel TL fiyatı
+    func unitTL(_ a: Asset) -> Double {
+        guard let r = rates else { return 0 }
+        var one = a
+        one.amount = 1
+        return usd(one) * r.tryPerUSD
+    }
+
+    /// Maliyeti girilmiş varlıkların toplam maliyeti (dolar)
+    func totalCostUSD() -> Double {
+        guard let r = rates else { return 0 }
+        return assets.filter { $0.cost > 0 }.reduce(0) { $0 + $1.cost / r.tryPerUSD }
+    }
+
+    /// Yalnızca altın için kâr/zarar ve maliyet (dolar)
+    func goldPL() -> (pl: Double, cost: Double)? {
+        guard let r = rates else { return nil }
+        let items: [Asset] = assets.filter { $0.cost > 0 && $0.kind.group == .gold }
+        if items.isEmpty { return nil }
+        let cost: Double = items.reduce(0) { $0 + $1.cost / r.tryPerUSD }
+        let value: Double = usdSum(items)
+        return (value - cost, cost)
+    }
+
     func moveAsset(_ draggedID: String, onto targetID: String, in bucketItems: [Asset]) {
         guard draggedID != targetID,
               let from = bucketItems.firstIndex(where: { $0.id == draggedID }),
@@ -1128,7 +1159,17 @@ final class Store: ObservableObject {
     func adjust(_ id: String, by d: Double) {
         guard let i = assets.firstIndex(where: { $0.id == id }) else { return }
         var a = assets[i]
-        a.amount = max(0, a.amount + d)
+        let old: Double = a.amount
+        let new: Double = max(0, old + d)
+        if a.cost > 0 && old > 0 {
+            let avg: Double = a.cost / old
+            if new > old {
+                a.cost = avg * old + unitTL(a) * (new - old)
+            } else {
+                a.cost = avg * new
+            }
+        }
+        a.amount = new
         upsert(a, delay: 0.5)
     }
 
@@ -1398,6 +1439,12 @@ final class Store: ObservableObject {
         return sortByValue ? list.sorted { usdSum($0.items) > usdSum($1.items) }
                            : list.sorted { $0.name < $1.name }
     }
+}
+
+func pctSuffix(_ p: Double?) -> String {
+    guard let p, p.isFinite else { return "" }
+    let n: String = abs(p).formatted(.number.precision(.fractionLength(1)))
+    return " (%\(n))"
 }
 
 func arrowText(_ v: Double, _ s: String) -> String {
@@ -2044,17 +2091,28 @@ struct SummaryView: View {
         .padding(.top, 8)
     }
 
+    private func plRow(_ title: String, _ pl: Double, _ cost: Double) -> some View {
+        let pct: Double? = cost > 0 ? pl / cost * 100 : nil
+        let txt: String = store.hidden ? "••••" : arrowText(pl, store.money(abs(pl))) + pctSuffix(pct)
+        return HStack {
+            Text(title).foregroundStyle(Theme.muted)
+            Spacer()
+            Text(txt)
+                .font(.headline)
+                .foregroundStyle(pl >= 0 ? Color.green : Color.red)
+        }
+        .font(.subheadline)
+    }
+
     @ViewBuilder private var plCard: some View {
         if let pl = store.totalPLUSD() {
             Card {
-                HStack {
-                    Text(L("Toplam kâr / zarar", "Total gain / loss")).foregroundStyle(Theme.muted)
-                    Spacer()
-                    Text(arrowText(pl, store.money(abs(pl))))
-                        .font(.headline)
-                        .foregroundStyle(pl >= 0 ? Color.green : Color.red)
+                VStack(spacing: 8) {
+                    plRow(L("Toplam kâr / zarar", "Total gain / loss"), pl, store.totalCostUSD())
+                    if let g = store.goldPL(), abs(g.cost - store.totalCostUSD()) > 0.01 {
+                        plRow(L("Altın kâr / zarar", "Gold gain / loss"), g.pl, g.cost)
+                    }
                 }
-                .font(.subheadline)
             }
         }
     }
@@ -2310,7 +2368,7 @@ struct AssetsView: View {
                         Text(note).font(.caption2).foregroundStyle(Theme.muted)
                     }
                     if !store.hidden, let pl = store.gainUSD(a) {
-                        Text(arrowText(pl, store.money(abs(pl))))
+                        Text(arrowText(pl, store.money(abs(pl))) + pctSuffix(store.plPct(a)))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(pl >= 0 ? Color.green : Color.red)
                     }
@@ -2461,6 +2519,7 @@ struct EditView: View {
     @State private var asset: Asset
     @State private var amountStr: String
     @State private var deltaStr = ""
+    @State private var buyStr = ""
     @State private var priceStr: String
     @State private var costStr: String
     @State private var rateStr: String
@@ -2486,7 +2545,7 @@ struct EditView: View {
         _asset = State(initialValue: asset)
         _amountStr = State(initialValue: asset.amount == 0 ? "" : fmtIn(asset.amount))
         _priceStr = State(initialValue: asset.price == 0 ? "" : fmtIn(asset.price))
-        _costStr = State(initialValue: asset.cost == 0 ? "" : fmtIn(asset.cost))
+        _costStr = State(initialValue: (asset.cost == 0 || asset.amount <= 0) ? "" : fmtIn(asset.cost / asset.amount))
         _rateStr = State(initialValue: asset.rate == 0 ? "" : fmtIn(asset.rate))
         _startDate = State(initialValue: parseDay(asset.start) ?? Date())
         let defMat: Date = Calendar.current.date(byAdding: .month, value: 3, to: Date()) ?? Date()
@@ -2568,6 +2627,32 @@ struct EditView: View {
         return hasPlace && customOK && stockOK
     }
 
+    private var deltaVal: Double { numTR(deltaStr) }
+
+    private var buyPlaceholder: String {
+        let u: Double = store.unitTL(asset)
+        return u > 0 ? fmtIn((u * 100).rounded() / 100) : "0"
+    }
+
+    /// Ortalama alış fiyatından toplam maliyeti bulur; yeni alımda ağırlıklı ortalamayı günceller
+    private func newCost(_ a: Asset) -> Double {
+        let old: Double = max(0, numTR(amountStr))
+        let d: Double = deltaVal
+        var avg: Double = max(0, numTR(costStr))
+        if d > 0 {
+            var bp: Double = max(0, numTR(buyStr))
+            if bp <= 0 && avg > 0 { bp = store.unitTL(a) }
+            if bp > 0 {
+                if avg > 0 && old > 0 {
+                    avg = (avg * old + bp * d) / (old + d)
+                } else if avg <= 0 {
+                    avg = old > 0 ? 0 : bp
+                }
+            }
+        }
+        return avg * a.amount
+    }
+
     func built() -> Asset {
         var a = asset
         a.amount = max(0, numTR(amountStr) + numTR(deltaStr))
@@ -2611,7 +2696,7 @@ struct EditView: View {
             a.price = 0
             a.cur = "tl"
         }
-        a.cost = showsCost ? max(0, numTR(costStr)) : 0
+        a.cost = showsCost ? newCost(a) : 0
         return a
     }
 
@@ -2826,15 +2911,31 @@ struct EditView: View {
         if asset.kind.isPriced { stockSection }
     }
 
+    @ViewBuilder private var costFields: some View {
+        label(L("Ortalama alış fiyatı, birim başına TL (isteğe bağlı, kâr/zarar için)", "Average purchase price per unit, TRY (optional, for gain/loss)"))
+        moneyField($costStr, allowNeg: false)
+        if deltaVal > 0 {
+            label(L("Bu alımın birim fiyatı, TL", "Unit price of this purchase, TRY"))
+            TextField(buyPlaceholder, text: $buyStr)
+                .keyboardType(.numbersAndPunctuation)
+                .padding(12)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 12))
+            Text(L("Boş bırakırsan güncel fiyat kullanılır. Kaydedince ortalama alış fiyatı kendiliğinden güncellenir.", "If left empty, the current price is used. The average purchase price updates automatically when you save."))
+                .font(.caption)
+                .foregroundStyle(Theme.muted)
+        } else if deltaVal < 0 {
+            Text(L("Satışta ortalama alış fiyatı değişmez, kalan miktarın kâr/zararı gösterilir.", "Selling does not change the average purchase price; gain/loss is shown for the remaining amount."))
+                .font(.caption)
+                .foregroundStyle(Theme.muted)
+        }
+    }
+
     @ViewBuilder private var amountFields: some View {
         label(amountLabel)
         moneyField($amountStr, allowNeg: false)
         label(L("Ekle / çıkar (örn. 2 veya -2)", "Add / remove (e.g. 2 or -2)"))
         moneyField($deltaStr, allowNeg: true)
-        if showsCost {
-            label(L("Toplam alış maliyeti, TL (isteğe bağlı, kâr/zarar için)", "Total purchase cost, TRY (optional, for gain/loss)"))
-            moneyField($costStr, allowNeg: false)
-        }
+        if showsCost { costFields }
     }
 
     @ViewBuilder private var actionButtons: some View {
