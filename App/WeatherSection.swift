@@ -7,9 +7,32 @@ struct WeatherSection: View {
     @State private var selected = "LTFM"
     @State private var loading = false
     @State private var pickedByUser = false
+    /// Tek meydan modu (meydan sayfası / Hava sekmesinde arama): uçuştan bağımsız.
+    var fixed: String? = nil
 
     var body: some View {
-        if let s = session.state {
+        if let icao = fixed {
+            VStack(spacing: 12) {
+                if let w = items.first(where: { $0.icao == icao }) {
+                    highlights
+                    metarCard(w)
+                    RunwayWindCard(weather: w, active: "", history: [], event: nil).id(w.icao)
+                    if let taf = w.taf { tafCard(taf, events: []) }
+                } else if loading {
+                    ProgressView().padding(40)
+                } else {
+                    Text(L("Bu meydan için hava durumu alınamadı.", "Couldn't load weather for this airport.")).foregroundStyle(Palette.secondary).padding(40)
+                }
+                Text(L("Kaynak: aviationweather.gov · bilgi amaçlıdır", "Source: aviationweather.gov · for information only"))
+                    .font(.caption2).foregroundStyle(Palette.secondary)
+            }
+            .task(id: icao) {
+                loading = true
+                items = await WeatherService.fetch([icao])
+                selected = icao
+                loading = false
+            }
+        } else if let s = session.state {
             let airports = FlightHelpers.airports(s)
             VStack(spacing: 12) {
                 // Meydan kartları: hangi meydanda sorun var, tek bakışta; dokununca o meydan seçilir
@@ -413,17 +436,62 @@ struct RunwayWindCard: View {
 struct WeatherView: View {
     @EnvironmentObject var model: AppModel
     @ObservedObject var session = FlightSession.shared
+    @State private var search = ""
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                if session.state != nil {
-                    WeatherSection().padding(16)
-                } else {
-                    EmptyFlightView().padding(.top, 60)
+                VStack(spacing: 12) {
+                    let hits = AirportDB.search(search)
+                    if !search.trimmingCharacters(in: .whitespaces).isEmpty {
+                        VStack(spacing: 0) {
+                            if hits.isEmpty {
+                                Text(L("Bulunamadı. ICAO (EGLL), IATA (LHR) ya da şehrin İngilizce adını (London) dene.", "Not found. Try ICAO (EGLL), IATA (LHR) or the city name (London)."))
+                                    .font(.footnote).foregroundStyle(Palette.secondary).padding(14)
+                            }
+                            ForEach(hits, id: \.self) { h in
+                                NavigationLink(value: h.icao) {
+                                    HStack {
+                                        Text(h.icao).font(.headline.monospaced()).frame(width: 56, alignment: .leading)
+                                        Text([h.iata, h.city].filter { !$0.isEmpty }.joined(separator: " · ")).font(.subheadline)
+                                        Spacer()
+                                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.secondary)
+                                    }
+                                    .padding(.horizontal, 14).padding(.vertical, 12)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                Divider().overlay(Color.white.opacity(0.08))
+                            }
+                        }
+                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    if session.state != nil {
+                        WeatherSection()
+                    } else if search.isEmpty {
+                        VStack(spacing: 10) {
+                            Image(systemName: "magnifyingglass").font(.largeTitle).foregroundStyle(Palette.secondary)
+                            Text(L("Takip edilen uçuş yok. Bir meydanın havasına bakmak için yukarıdan ara.", "No flight being tracked. Search above to see any airport's weather."))
+                                .font(.subheadline).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
+                        }
+                        .padding(.top, 60)
+                    }
                 }
+                .padding(16)
             }
             .background(Palette.bg)
+            .searchable(text: $search, prompt: L("Başka meydan: kod ya da şehir", "Other airport: code or city"))
+            .autocorrectionDisabled()
+            .navigationDestination(for: String.self) { icao in
+                ScrollView { WeatherSection(fixed: icao).padding(16) }
+                    .background(Palette.bg)
+                    .navigationTitle(AirportDB.city(icao: icao).map { "\(icao) · \($0)" } ?? icao)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button { model.openAirport = icao; model.tab = .airports } label: { Label(L("Meydan notları", "Airport notes"), systemImage: "mappin.and.ellipse") }
+                        }
+                    }
+            }
             .navigationTitle(L("Hava", "Weather"))
             .toolbar { CommonToolbar() }
             .refreshable { await model.refresh() }

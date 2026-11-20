@@ -6,15 +6,23 @@ struct AirportsView: View {
     @ObservedObject var session = FlightSession.shared
     @ObservedObject var store = AirportStore.shared
     @State private var search = ""
+    @State private var path: [String] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
-                let code = search.trimmingCharacters(in: .whitespaces).uppercased()
-                if code.count >= 3 {
+                let hits = AirportDB.search(search)
+                if !search.trimmingCharacters(in: .whitespaces).isEmpty {
                     Section(L("Arama", "Search")) {
-                        let icao = code.count == 3 ? (AirportDB.icao(code) ?? code) : code
-                        NavigationLink(value: icao) { AirportRow(icao: icao, subtitle: nil) }
+                        if hits.isEmpty {
+                            Text(L("Bulunamadı. ICAO (EGLL), IATA (LHR) ya da şehrin İngilizce adını (London) dene.", "Not found. Try ICAO (EGLL), IATA (LHR) or the city name (London)."))
+                                .font(.footnote).foregroundStyle(Palette.secondary)
+                        }
+                        ForEach(hits, id: \.self) { h in
+                            NavigationLink(value: h.icao) {
+                                AirportRow(icao: h.icao, subtitle: h.iata.isEmpty ? nil : h.iata)
+                            }
+                        }
                     }
                 }
                 if let s = session.state {
@@ -81,11 +89,17 @@ struct AirportsView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Palette.bg)
-            .searchable(text: $search, prompt: L("ICAO ya da IATA (LTFM, LHR)", "ICAO or IATA (LTFM, LHR)"))
-            .textInputAutocapitalization(.characters)
+            .searchable(text: $search, prompt: L("Kod ya da şehir (LHR, London)", "Code or city (LHR, London)"))
+            .autocorrectionDisabled()
             .navigationTitle(L("Meydanlar", "Airports"))
             .navigationDestination(for: String.self) { AirportDetailView(icao: $0) }
             .toolbar { CommonToolbar() }
+            .onChange(of: model.openAirport) { _, icao in
+                if let icao { path = [icao]; model.openAirport = nil }
+            }
+            .onAppear {
+                if let icao = model.openAirport { path = [icao]; model.openAirport = nil }
+            }
         }
     }
 }
@@ -111,7 +125,7 @@ struct AirportRow: View {
 // MARK: - Meydan sayfası
 
 struct AirportDetailView: View {
-    enum Part: Hashable { case ops, layover, comments }
+    enum Part: Hashable { case ops, weather, layover, comments }
 
     let icao: String
     @EnvironmentObject var model: AppModel
@@ -121,6 +135,7 @@ struct AirportDetailView: View {
     @State private var onlyType = false
     @State private var similarWind = false
     @State private var currentWind: Int?
+    @State private var metar: AirportWeather?
     @State private var composing: [AirportNote.Kind]?
     @State private var rating = false
 
@@ -132,10 +147,27 @@ struct AirportDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 12) {
+                if let w = metar {
+                    let st = WeatherStatus(w)
+                    Button { part = .weather } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: st.icon).foregroundStyle(st.color)
+                            Text(st.isWarning ? st.short : (st.detail.isEmpty ? L("Sorun yok", "Fine") : st.detail))
+                                .font(.subheadline.weight(st.isWarning ? .bold : .regular)).lineLimit(1)
+                            Spacer()
+                            Text(L("Hava", "Weather")).font(.caption.bold()).foregroundStyle(Palette.stand)
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.secondary)
+                        }
+                        .padding(12)
+                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
                 Picker("", selection: $part) {
-                    Text(L("Operasyon", "Operations")).tag(Part.ops)
+                    Text(L("Operasyon", "Ops")).tag(Part.ops)
+                    Text(L("Hava", "Weather")).tag(Part.weather)
                     Text(L("Layover", "Layover")).tag(Part.layover)
-                    Text(L("Yorumlar", "Comments") + " · \(store.notes(icao).filter { !$0.kind.isLayover }.count)").tag(Part.comments)
+                    Text(L("Notlar", "Notes") + " \(store.notes(icao).filter { !$0.kind.isLayover }.count)").tag(Part.comments)
                 }
                 .pickerStyle(.segmented)
                 if let st = store.cloudStatus {
@@ -143,6 +175,7 @@ struct AirportDetailView: View {
                 }
                 switch part {
                 case .ops: ops
+                case .weather: WeatherSection(fixed: icao)
                 case .layover: layover
                 case .comments: comments
                 }
@@ -152,7 +185,7 @@ struct AirportDetailView: View {
             .padding(16)
         }
         .background(Palette.bg)
-        .navigationTitle(icao)
+        .navigationTitle(AirportDB.city(icao: icao).map { "\(icao) · \($0)" } ?? icao)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -169,7 +202,8 @@ struct AirportDetailView: View {
         .task {
             RecentAirports.add(icao)
             await store.load(icao)
-            if let w = await WeatherService.fetch([icao]).first?.metar, let wind = Wind.parse(w) { currentWind = wind.direction }
+            metar = await WeatherService.fetch([icao]).first
+            if let m = metar?.metar, let wind = Wind.parse(m) { currentWind = wind.direction }
         }
         .sheet(item: Binding(get: { composing.map { KindList(kinds: $0) } }, set: { composing = $0?.kinds })) { list in
             NoteComposer(icao: icao, kinds: list.kinds)

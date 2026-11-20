@@ -14,6 +14,7 @@ final class AppModel: ObservableObject {
     @Published var showSettings = false
     @Published var showAdd = false
     @Published var recordRequest: RecordRequest?
+    @Published var openAirport: String?   // başka sekmeden Meydanlar'da açılacak meydan
 
     let store = FlightStore()
     let session = FlightSession.shared
