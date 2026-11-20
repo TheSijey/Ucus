@@ -175,6 +175,12 @@ struct HelpView: View {
                 bullet(L("Sunum: brifingi büyük yazıyla tam ekran açar, ekibe göstermen için; ekran kapanmaz.",
                          "Present: opens the briefing full screen in large type to show the crew; the screen stays on."))
             }
+            Section(L("Ön izleme ve kilit ekranı", "Preview and Lock Screen")) {
+                bullet(L("Uçuş CDM'de henüz yoksa tarifeden ön izleme olarak açılır: günün akışı, brifing, hava ve meydanlar çalışır. CDM yayınlayınca stand ve saatler kendiliğinden gelir.",
+                         "If the flight isn't in CDM yet, it opens as a preview from the schedule: schedule, briefing, weather and airports work. Once CDM publishes it, stand and times arrive automatically."))
+                bullet(L("Ayarlar'da kilit ekranı ve Ada'nın imzadan kaç saat önce ekleneceğini seçebilirsin. O saatte bir bildirim gelir, dokununca eklenir.",
+                         "In Settings you can choose how many hours before sign-on the Lock Screen card and Dynamic Island are added. A notification arrives at that time; tap it to add."))
+            }
             Section(L("Yol süresi", "Drive time")) {
                 bullet(L("Ayarlar'da ev konumunu girersen, evden çıkış saatinde beklenen trafikle havalimanına yol süresi Bugün ekranında gösterilir (\"imzadan 8 dk önce varırsın\" gibi). Çıkış saatini yine sen ayarlarsın.",
                          "If you set your home location in Settings, the expected drive time to the airport at your leave time is shown on Today (like \"you arrive 8 min before sign-on\"). You still choose the leave time."))

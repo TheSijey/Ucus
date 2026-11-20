@@ -268,6 +268,27 @@ extension NotificationManager {
     }
 }
 
+extension NotificationManager {
+    /// Kilit ekranına ekleme zamanı (imza − ayar). iOS kilit ekranı kartını sadece uygulama açıkken başlatabildiği için
+    /// o anda bildirim gelir; dokununca uygulama açılır ve kart eklenir.
+    static func scheduleActivityReminder(_ s: FlightAttributes.ContentState) async {
+        let id = "activity-" + BriefingStore.key(for: s)
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
+        guard s.isPreview != true else { return }
+        let lead = AppSettings.activityLeadHours
+        guard lead > 0 else { return }
+        let fire = s.signOn.addingTimeInterval(-Double(lead) * 3600)
+        guard fire > Date(), fire < s.hideAt else { return }
+        let content = UNMutableNotificationContent()
+        content.title = L("\(s.flight) · imzaya \(lead) saat", "\(s.flight) · sign-on in \(lead) h")
+        content.body = L("Kilit ekranına ve Ada'ya eklemek için dokun.", "Tap to add it to the Lock Screen and Dynamic Island.")
+        content.interruptionLevel = .timeSensitive
+        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
+        try? await UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: id, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
+    }
+}
+
 extension Notification.Name {
     static let openFlightRecord = Notification.Name("openFlightRecord")
 }

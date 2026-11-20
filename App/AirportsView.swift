@@ -18,10 +18,10 @@ struct AirportsView: View {
                     }
                 }
                 if let s = session.state {
-                    Section(L("Bu tur", "This trip")) {
-                        ForEach(FlightHelpers.airports(s), id: \.self) { icao in
+                    Section(s.isPreview == true ? L("Bu tur · ön izleme", "This trip · preview") : L("Bu tur", "This trip")) {
+                        ForEach(FlightHelpers.allAirports(s), id: \.self) { icao in
                             NavigationLink(value: icao) {
-                                AirportRow(icao: icao, subtitle: icao == FlightHelpers.destICAO(s) ? L("Varış", "Arrival") : L("Kalkış", "Departure"))
+                                AirportRow(icao: icao, subtitle: icao == FlightHelpers.destICAO(s) ? L("Varış", "Arrival") : (icao == FlightHelpers.airports(s).first ? L("Kalkış", "Departure") : L("Ara bacak", "Leg")))
                             }
                         }
                         Button { model.recordRequest = RecordRequest.forCurrent(s) } label: {
@@ -31,7 +31,7 @@ struct AirportsView: View {
                 }
                 if session.state == nil, let s = session.last {
                     Section(L("Son uçuşun · \(s.flight)", "Your last flight · \(s.flight)")) {
-                        ForEach(FlightHelpers.airports(s), id: \.self) { icao in
+                        ForEach(FlightHelpers.allAirports(s), id: \.self) { icao in
                             HStack {
                                 NavigationLink(value: icao) { AirportRow(icao: icao, subtitle: nil) }
                                 Menu {
@@ -51,10 +51,21 @@ struct AirportsView: View {
                             .font(.caption).foregroundStyle(Palette.secondary)
                     }
                 }
-                let known = store.knownAirports.filter { icao in !(session.state.map { FlightHelpers.airports($0).contains(icao) } ?? false) }
-                if !known.isEmpty {
-                    Section(L("Kayıtlı meydanlar", "Saved airports")) {
-                        ForEach(known, id: \.self) { icao in
+                let tracked = session.state.map { FlightStore.normalizeFlight($0.flight) }
+                if let next = model.store.upcoming.first(where: { FlightStore.normalizeFlight($0.flight) != tracked }),
+                   let aps = next.airports, !aps.isEmpty {
+                    Section(L("Sıradaki uçuşun · \(next.flight) · \(UTCFormat.shortDay(next.date))", "Your next flight · \(next.flight) · \(UTCFormat.shortDay(next.date))")) {
+                        ForEach(aps, id: \.self) { icao in
+                            NavigationLink(value: icao) { AirportRow(icao: icao, subtitle: nil) }
+                        }
+                    }
+                }
+                let recent = RecentAirports.list.filter { icao in
+                    !(session.state.map { FlightHelpers.allAirports($0).contains(icao) } ?? false)
+                }
+                if !recent.isEmpty {
+                    Section(L("Son baktıkların", "Recently viewed")) {
+                        ForEach(recent, id: \.self) { icao in
                             NavigationLink(value: icao) { AirportRow(icao: icao, subtitle: nil) }
                         }
                     }
@@ -156,6 +167,7 @@ struct AirportDetailView: View {
         }
         .refreshable { await store.load(icao) }
         .task {
+            RecentAirports.add(icao)
             await store.load(icao)
             if let w = await WeatherService.fetch([icao]).first?.metar, let wind = Wind.parse(w) { currentWind = wind.direction }
         }
@@ -648,5 +660,16 @@ struct RatingSheet: View {
                 .accessibilityLabel("\(title) \(i)/5")
             }
         }
+    }
+}
+
+/// Son bakılan meydanlar (en fazla 5).
+enum RecentAirports {
+    private static let key = "recentAirports"
+    static var list: [String] { UserDefaults.standard.stringArray(forKey: key) ?? [] }
+    static func add(_ icao: String) {
+        var l = list.filter { $0 != icao }
+        l.insert(icao, at: 0)
+        UserDefaults.standard.set(Array(l.prefix(5)), forKey: key)
     }
 }

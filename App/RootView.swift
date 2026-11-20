@@ -32,7 +32,7 @@ struct ContentView: View {
         .tint(Palette.stand)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $model.showAdd) {
-            AddFlightView { p in model.store.add(date: p.date, flight: p.flight, kind: p.kind, legs: p.legs) }
+            AddFlightView { p in model.store.add(date: p.date, flight: p.flight, kind: p.kind, legs: p.legs, airports: p.airports) }
         }
         .sheet(isPresented: $model.showSettings) {
             SettingsView()
@@ -76,6 +76,7 @@ struct ContentView: View {
             if phase == .active {
                 model.store.prune()
                 ActivityObserver.watchAll()
+                LiveActivityManager.ensureActivity()
                 if let s = session.state, Date().timeIntervalSince(s.updatedAt) > 180 {
                     Task { await model.refresh() }
                 }

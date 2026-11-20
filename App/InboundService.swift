@@ -330,7 +330,7 @@ enum AeroDataBox {
 
     /// Dış meydandan kalkan uçuş (CDM'de yok): bilgiler AeroDataBox'tan.
     /// `day`: roster'daki UTC gün; yoksa en yakın (henüz kalkmamış ya da az önce kalkmış) sefer.
-    static func outstation(flight raw: String, day: Date?) async -> FlightAttributes.ContentState? {
+    static func outstation(flight raw: String, day: Date?, istanbul: Bool = false) async -> FlightAttributes.ContentState? {
         let ours = normFlight(raw)
         var utc = Calendar(identifier: .gregorian)
         utc.timeZone = TimeZone(identifier: "UTC")!
@@ -346,7 +346,7 @@ enum AeroDataBox {
         var candidates: [Flight] = []
         for d in dates {
             let list = (await request(path: "flights/number/\(ours)/\(d)", ttl: 900) ?? [])
-                .filter { ($0.departure?.airport?.icao ?? InboundService.airport) != InboundService.airport && ($0.status ?? "") != "Canceled" }
+                .filter { (($0.departure?.airport?.icao ?? InboundService.airport) == InboundService.airport) == istanbul && ($0.status ?? "") != "Canceled" }
             candidates += list
             if let day, candidates.contains(where: { dep($0).map { utc.isDate($0, inSameDayAs: day) } ?? false }) { break }
             if day == nil, candidates.contains(where: { (dep($0) ?? .distantPast) > Date().addingTimeInterval(-3 * 3600) }) { break }
@@ -368,7 +368,14 @@ enum AeroDataBox {
             flight: ours, callsign: "", registration: f.aircraft?.reg ?? "", aircraftType: type,
             destination: to?.iata ?? "", gate: f.departure?.gate ?? "", stand: "", runway: f.departure?.runway ?? "",
             eobt: std, tobt: nil, tsat: nil, ctot: nil,
-            signOn: std.addingTimeInterval(-3600), updatedAt: Date())
+            signOn: std.addingTimeInterval(istanbul ? -CDMParser.signOnBeforeEOBT : -3600), updatedAt: Date())
+        if istanbul {
+            // Ön izleme: CDM'de henüz yok; tarife saatleri
+            state.isPreview = true
+            state.turn = TurnInfo(destICAO: to?.icao ?? "", destIATA: to?.iata ?? "", destCity: to?.municipalityName ?? "",
+                                  outboundArrival: arrival, returnFlight: nil, returnDeparture: nil, returnArrival: nil)
+            return state
+        }
         state.origin = from.icao
         state.originIATA = from.iata
         state.originCity = from.municipalityName ?? from.shortName
@@ -716,6 +723,16 @@ enum FlightLoader {
                let s = await AeroDataBox.outstation(flight: q, day: plannedDay) {
                 DebugLog.add("CDM'de yok, dış meydan kalkışı: \(s.flight) \(s.originCode)")
                 return ManualTimes.apply(s)
+            }
+            // İstanbul kalkışı ama CDM henüz yayınlamadı: tarifeden ön izleme
+            if isFlightNumber, InboundService.rapidKey != nil,
+               var p = await AeroDataBox.outstation(flight: q, day: plannedDay, istanbul: true) {
+                DebugLog.add("CDM'de yok, ön izleme: \(p.flight) \(p.eobt.map { $0.formatted(.dateTime.day().month().hour().minute()) } ?? "")")
+                if let t = await AeroDataBox.turn(registration: p.registration, flight: p.flight, around: p.eobt,
+                                                  returnNumber: legs.map { $0.first ?? "" }) {
+                    p.turn = t
+                }
+                return p
             }
             throw error
         }

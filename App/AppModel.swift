@@ -174,6 +174,15 @@ enum FlightHelpers {
         return ["LTFM"] + [destICAO(s)].compactMap { $0 }.filter { !$0.isEmpty }
     }
 
+    /// Turun bütün meydanları (ara bacaklar dahil), sırayla.
+    static func allAirports(_ s: FlightAttributes.ContentState) -> [String] {
+        var list = airports(s)
+        for c in [s.turn?.returnToICAO] + (s.extraLegs ?? []).flatMap({ [$0.fromICAO, $0.toICAO] }) {
+            if let c, !c.isEmpty, !list.contains(c) { list.append(c) }
+        }
+        return list
+    }
+
     /// Varış meydanı ICAO: dönüş bilgisinden, yoksa CDM'deki varış kodundan (BEY → OLBA).
     static func destICAO(_ s: FlightAttributes.ContentState) -> String? {
         if let d = s.turn?.destICAO, !d.isEmpty { return d }

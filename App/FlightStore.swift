@@ -7,6 +7,7 @@ struct PlannedFlight: Identifiable, Codable, Hashable {
     var flight: String  // "TK1751" (ilk bacak)
     var kind: TripKind? = nil          // nil: eski kayıt, dönüş otomatik
     var legs: [PlannedLeg]? = nil      // ilk bacaktan sonrakiler
+    var airports: [String]? = nil      // ekleme ekranında bulunan meydanlar (Meydanlar sekmesi için)
 
     /// Yüklemeye gidecek bacak numaraları: nil = otomatik dönüş tahmini.
     var legNumbers: [String]? {
@@ -64,7 +65,7 @@ final class FlightStore: ObservableObject {
     }
 
     /// `date`: UTC takvimde seçilmiş gün.
-    func add(date: Date, flight raw: String, kind: TripKind? = nil, legs: [PlannedLeg]? = nil) {
+    func add(date: Date, flight raw: String, kind: TripKind? = nil, legs: [PlannedLeg]? = nil, airports: [String]? = nil) {
         let flight = Self.normalizeFlight(raw)
         guard !flight.isEmpty else { return }
         let day = UTC.startOfDay(date)
@@ -72,8 +73,9 @@ final class FlightStore: ObservableObject {
         if let i = flights.firstIndex(where: { $0.date == day && $0.flight == flight }) {
             flights[i].kind = kind
             flights[i].legs = cleanLegs
+            flights[i].airports = airports
         } else {
-            flights.append(PlannedFlight(date: day, flight: flight, kind: kind, legs: cleanLegs))
+            flights.append(PlannedFlight(date: day, flight: flight, kind: kind, legs: cleanLegs, airports: airports))
         }
         save()
     }
@@ -147,6 +149,12 @@ enum AppSettings {
     /// İmzadan kaç dk önce evden çıkılıyor (0 = kapalı). Varsayılan 60.
     static var leaveMinutes: Int {
         UserDefaults.standard.object(forKey: leaveMinutesKey) as? Int ?? 60
+    }
+
+    static let activityLeadKey = "activityLeadHours"
+    /// Kilit ekranı ve Ada'ya imzadan kaç saat önce eklensin (0 = CDM'de bulununca hemen).
+    static var activityLeadHours: Int {
+        UserDefaults.standard.object(forKey: activityLeadKey) as? Int ?? 0
     }
 
     static let hotelRemindKey = "hotelRemindMinutes"

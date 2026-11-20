@@ -17,6 +17,14 @@ struct TodayView: View {
             ScrollView {
                 if let s = session.state {
                     VStack(spacing: 12) {
+                        if s.isPreview == true { previewBanner }
+                        else if LiveActivityManager.current == nil, s.hideAt > Date(), AppSettings.activityLeadHours > 0,
+                                !LiveActivityManager.shouldShow(s) {
+                            Label(L("Kilit ekranına imzadan \(AppSettings.activityLeadHours) sa önce eklenecek", "Added to the Lock Screen \(AppSettings.activityLeadHours) h before sign-on"),
+                                  systemImage: "lock.iphone")
+                                .font(.footnote).foregroundStyle(Palette.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                         if Self.isLanded(s) { finishCard(s) }
                         PhaseBar(state: s)
                         phaseCard(s)
@@ -58,6 +66,25 @@ struct TodayView: View {
                 if let s = session.state { ManualEditSheet(state: s, field: field).environmentObject(model) }
             }
         }
+    }
+
+    // MARK: Ön izleme
+
+    private var previewBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(L("Ön izleme", "Preview"), systemImage: "eye").font(.headline).foregroundStyle(Palette.stand)
+            Text(L("Bu uçuş CDM'de henüz yayınlanmadı; saatler tarifeden. CDM yayınlayınca stand, gate ve saatler kendiliğinden gelir, kilit ekranı o zaman eklenir.",
+                   "This flight isn't in CDM yet; times are from the schedule. Once CDM publishes it, stand, gate and times arrive automatically and the Lock Screen card is added then."))
+                .font(.footnote).foregroundStyle(.white.opacity(0.85))
+            Button { Task { await model.refresh() } } label: {
+                Label(L("CDM'yi şimdi kontrol et", "Check CDM now"), systemImage: "arrow.clockwise").font(.subheadline.bold())
+            }
+            .buttonStyle(.bordered)
+            .disabled(model.loading)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.stand.opacity(0.1), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     // MARK: Uçuşu bitir

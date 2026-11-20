@@ -86,16 +86,42 @@ enum LiveActivityManager {
         }
 
         FlightSession.shared.set(query: query, state: state)
-        if Date() < state.hideAt, ActivityAuthorizationInfo().areActivitiesEnabled {
-            let content = ActivityContent(state: state, staleDate: state.hideAt)
-            let activity = try Activity.request(attributes: FlightAttributes(query: query), content: content, pushType: nil)
-            ActivityObserver.watch(activity)
+        if shouldShow(state) {
+            try request(query: query, state: state)
+        } else {
+            await NotificationManager.scheduleActivityReminder(state)
+            DebugLog.add(state.isPreview == true ? "Ön izleme: kilit ekranı CDM'de yayınlanınca" : "Kilit ekranı \(AppSettings.activityLeadHours) sa önce eklenecek")
         }
         DebugLog.add("Başlatıldı \(state.flight) · imza \(state.signOn.formatted(.dateTime.hour().minute())) · stand \(state.stand)")
 
         await NotificationManager.scheduleFor(state)
         scheduleNextWake()
         WidgetSync.push()
+    }
+
+    /// Kilit ekranı / Ada şimdi gösterilsin mi? Ön izlemede hayır; ayar varsa imzadan o kadar saat önce.
+    static func shouldShow(_ s: FlightAttributes.ContentState, now: Date = Date()) -> Bool {
+        guard s.isPreview != true, now < s.hideAt, ActivityAuthorizationInfo().areActivitiesEnabled else { return false }
+        let lead = AppSettings.activityLeadHours
+        return lead == 0 || now >= s.signOn.addingTimeInterval(-Double(lead) * 3600)
+    }
+
+    private static func request(query: String, state: FlightAttributes.ContentState) throws {
+        let content = ActivityContent(state: state, staleDate: state.hideAt)
+        let activity = try Activity.request(attributes: FlightAttributes(query: query), content: content, pushType: nil)
+        ActivityObserver.watch(activity)
+    }
+
+    /// Uygulama öne gelince: zamanı geldiyse ve etkinlik yoksa kilit ekranına ekler.
+    static func ensureActivity() {
+        let session = FlightSession.shared
+        guard let s = session.state, current == nil, shouldShow(s) else { return }
+        do {
+            try request(query: session.query, state: s)
+            DebugLog.add("Kilit ekranına eklendi \(s.flight)")
+        } catch {
+            DebugLog.add("Kilit ekranına eklenemedi: \(error.localizedDescription)")
+        }
     }
 
     /// Durumu kaydeder; etkinlik hâlâ Ada'daysa onu da günceller.
@@ -173,7 +199,7 @@ enum FlightRefresher {
         }
         DebugLog.add("Yenile başladı \(old.flight)")
         do {
-            var state = try await FlightLoader.load(query: session.query, plannedDay: old.isOutstation ? old.eobt : nil,
+            var state = try await FlightLoader.load(query: session.query, plannedDay: (old.isOutstation || old.isPreview == true) ? old.eobt : nil,
                                                     outstation: old.isOutstation, legs: old.tripLegs)
             if state.isOutstation {
                 // İmza elle girilmediyse kalkış öne çekilince eski (geç) tahmin kalır
@@ -181,7 +207,8 @@ enum FlightRefresher {
                 if state.registration.isEmpty { state.registration = old.registration }
                 state.leaveAt = state.pickupAt.flatMap { $0 > Date() ? $0 : nil }
             } else {
-                state.signOn = max(old.signOn, state.signOn)
+                // Ön izlemedeki tahmini imza, CDM gelince yerini gerçeğine bırakır
+                if old.isPreview != true { state.signOn = max(old.signOn, state.signOn) }
                 SignOnMemory.remember(flight: state.flight, signOn: state.signOn)
                 state.leaveAt = SignOnMemory.leave(for: state.signOn, minutes: AppSettings.leaveMinutes)
             }
@@ -192,6 +219,11 @@ enum FlightRefresher {
                 await NotificationManager.scheduleFor(state)
             }
             await LiveActivityManager.apply(state)
+            if old.isPreview == true, state.isPreview != true {
+                DebugLog.add("Ön izleme bitti: \(state.flight) CDM'de yayınlandı")
+                await NotificationManager.scheduleFor(state)
+            }
+            LiveActivityManager.ensureActivity()
             DebugLog.add("Yenile tamam · stand \(state.stand) · imza \(state.signOn.formatted(.dateTime.hour().minute()))")
             LiveActivityManager.scheduleNextWake()
             return nil

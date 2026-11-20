@@ -33,6 +33,7 @@ struct FlightAttributes: ActivityAttributes {
         // Kullanıcının belirlediği bacaklar (ilk sefer hariç). nil: dönüş otomatik tahmin; []: tek bacak.
         var tripLegs: [String]? = nil
         var extraLegs: [LegInfo]? = nil  // dönüşten sonraki bacaklar (3., 4. ...)
+        var isPreview: Bool? = nil       // CDM'de henüz yok: tarifeden ön izleme
     }
 
     /// Kullanıcının aradığı şey (1751, LTD ...). Yenilemede tekrar kullanılır.

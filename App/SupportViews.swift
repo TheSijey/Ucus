@@ -258,6 +258,14 @@ struct AddFlightView: View {
         p.flight = f
         p.kind = kind
         p.legs = legs
+        // Bulunan rotalardan meydan listesi
+        var aps: [String] = []
+        for (n, next) in [(f, false)] + legs.map({ ($0.flight, $0.dayOffset > 0) }) {
+            if let pv = previews[key(FlightStore.normalizeFlight(n), legDay(next))] {
+                for c in [pv.fromICAO, pv.toICAO] where !c.isEmpty && !aps.contains(c) { aps.append(c) }
+            }
+        }
+        p.airports = aps.isEmpty ? nil : aps
         onSave(p)
         if editing != nil { dismiss(); return }
         added.insert("\(UTCFormat.shortDay(date)) – " + ([FlightStore.normalizeFlight(f)] + legs.map { FlightStore.normalizeFlight($0.flight) }).joined(separator: " · "), at: 0)
@@ -281,6 +289,7 @@ private struct FocusIf: ViewModifier {
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppSettings.leaveMinutesKey) private var leaveMinutes = 60
+    @AppStorage(AppSettings.activityLeadKey) private var activityLead = 0
     @AppStorage(Lang.key, store: SharedStore.defaults) private var language = "system"
     @AppStorage(AppSettings.hotelRemindKey) private var hotelRemind = 15
 
@@ -309,6 +318,17 @@ struct SettingsView: View {
                     Text(L("Bu saate kadar Ada'da yeşil ev sayacı, sonra sarı imza sayacı görünür. O anda uçak sesli bildirim gelir. Değişiklik bir sonraki takip başlatmada geçerli olur.", "Until then the Dynamic Island shows a green leave-home countdown, then the yellow sign-on countdown. An alert with the chime sound arrives at that moment. Changes apply the next time you start tracking."))
                 }
                 HomeLocationSection(leaveMinutes: leaveMinutes)
+                Section {
+                    Picker(L("Ne zaman eklensin", "When to add"), selection: $activityLead) {
+                        Text(L("CDM'de bulununca", "When found in CDM")).tag(0)
+                        ForEach([2, 3, 4, 6, 8, 12], id: \.self) { h in Text(L("İmzadan \(h) sa önce", "\(h) h before sign-on")).tag(h) }
+                    }
+                } header: {
+                    Text(L("Kilit ekranı ve Ada", "Lock Screen and Dynamic Island"))
+                } footer: {
+                    Text(L("Uçuş uygulamada hemen takip edilir; kilit ekranı kartı ve Ada seçtiğin saatte eklenir. iOS bu kartı sadece uygulama açıkken başlatabildiği için o saatte bir bildirim gelir, dokununca eklenir (uygulamayı o saatten sonra açman da yeter).",
+                           "The flight is tracked in the app right away; the Lock Screen card and Dynamic Island are added at the time you choose. iOS only lets the app start this card while it's open, so a notification arrives at that time; tap it to add (opening the app after that time also works)."))
+                }
                 Section {
                     Stepper(value: $hotelRemind, in: 0...60, step: 5) {
                         LabeledContent(L("Otel hatırlatması", "Hotel reminder")) {
