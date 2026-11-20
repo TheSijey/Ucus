@@ -227,7 +227,12 @@ async function handle(req, env) {
       const lang = b.lang === 'en' ? 'en' : 'tr';
       const res = await push(env, u.devices || [], lang === 'en' ? 'Test notification' : 'Deneme bildirimi',
         lang === 'en' ? 'Price alerts are working.' : 'Fiyat alarmları çalışıyor.');
-      if (res.bad.length) { u.devices = u.devices.filter(d => !res.bad.includes(d.token)); await saveUser(env, uid, u); }
+      const fails = res.results.filter(r => r.status !== 200);
+      await env.ALERTS.put('apns-last', JSON.stringify({ at: new Date().toISOString(), results: res.results }));
+      if (fails.length) {
+        const why = fails.map(f => f.status + ' ' + (f.reason || '')).join(', ');
+        return json({ error: (lang === 'en' ? 'Apple rejected the notification: ' : 'Apple bildirimi reddetti: ') + why, results: res.results });
+      }
       return json({ ok: true, sent: (u.devices || []).length, results: res.results });
     }
     const prices = (await env.ALERTS.get('prices', 'json')) || null;

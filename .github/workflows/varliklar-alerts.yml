@@ -79,7 +79,7 @@ jobs:
           print("Başlık var mı:", "BEGIN" in raw, "| uzun çizgi var mı:", any(c in raw for c in "—–"),
                 "| anahtar uzunluğu:", len(body), "karakter (normali 200)")
           der = base64.b64decode(body + "=" * (-len(body) % 4))
-          print("Çözülen bayt:", len(der), "(normali 138)")
+          print("Çözülen bayt:", len(der), "(normali 150)")
           if len(der) < 100:
               sys.exit("APNS_KEY_P8 eksik ya da yanlış görünüyor")
           pem = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(textwrap.wrap(body, 64)) + "\n-----END PRIVATE KEY-----"
