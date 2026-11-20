@@ -96,7 +96,7 @@ async function apnsJWT(env) {
   // Apple 20 dakikadan sık yeni anahtar üretilmesini istemez; KV'de 50 dk saklanır.
   const cached = await env.ALERTS.get('apns-jwt', 'json');
   const now = Math.floor(Date.now() / 1000);
-  if (cached && now - cached.iat < 3000) return cached.jwt;
+  if (cached && now - cached.iat < 3000 && cached.kid === env.APNS_KEY_ID && cached.iss === env.APPLE_TEAM_ID) return cached.jwt;
   const body = String(env.APNS_KEY_P8).replace(/(BEGIN|END)[\s\w]*?KEY/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
   const der = Uint8Array.from(atob(body), c => c.charCodeAt(0));
   const key = await crypto.subtle.importKey('pkcs8', der, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
@@ -104,7 +104,7 @@ async function apnsJWT(env) {
   const claims = b64urlStr(JSON.stringify({ iss: env.APPLE_TEAM_ID, iat: now }));
   const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, new TextEncoder().encode(head + '.' + claims));
   const jwt = head + '.' + claims + '.' + b64url(sig);
-  await env.ALERTS.put('apns-jwt', JSON.stringify({ jwt, iat: now }));
+  await env.ALERTS.put('apns-jwt', JSON.stringify({ jwt, iat: now, kid: env.APNS_KEY_ID, iss: env.APPLE_TEAM_ID }));
   return jwt;
 }
 
