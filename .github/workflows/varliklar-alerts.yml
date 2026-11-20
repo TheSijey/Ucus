@@ -63,6 +63,22 @@ jobs:
         run: |
           npx --yes wrangler@4 deploy || { echo "Tekrar deneniyor..."; sleep 20; npx --yes wrangler@4 deploy; }
 
+      - name: Anahtar teşhisi
+        env:
+          APNS_KEY_P8: ${{ secrets.APNS_KEY_P8 }}
+          APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          def body(v): return re.sub(r"[^A-Za-z0-9+/=]", "", re.sub(r"(BEGIN|END)[\s\w]*?KEY", "", v or ""))
+          kid = re.sub(r"[^A-Z0-9]", "", (os.environ.get("APNS_KEY_ID") or "").upper())
+          akid = re.sub(r"[^A-Z0-9]", "", (os.environ.get("ASC_KEY_ID") or "").upper())
+          print("Bildirim anahtarı = App Store Connect anahtarı mı:", body(os.environ.get("APNS_KEY_P8")) == body(os.environ.get("ASC_KEY_P8")))
+          print("Bildirim Key ID = App Store Connect Key ID mi:", kid == akid)
+          PY
+
       - name: Gizli bilgileri yükle
         if: env.APNS == '1'
         env:
