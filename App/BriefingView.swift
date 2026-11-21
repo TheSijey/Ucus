@@ -80,7 +80,7 @@ struct BriefingView: View {
         let statuses = weather.map(WeatherStatus.init)
         let warnIndex = statuses.firstIndex { $0.isWarning }
         let pkg = notams.packages[k]
-        let critical = (pkg.map { NotamFilter.relevant($0.notams, s) } ?? []).filter { $0.level == .critical }
+        let critical = (pkg.map { NotamFilter.relevant($0.notams, s, alternates: $0.alternates ?? []) } ?? []).filter { $0.level == .critical }
         let dg = notes.dgItems ?? []
         let hasNote = !notes.crewNote.isEmpty || notes.drawing != nil
         return Card(padding: 0) {
@@ -97,7 +97,7 @@ struct BriefingView: View {
                 row(pkg == nil ? .todo : (critical.isEmpty ? .ok : .alert(critical.count)), "NOTAM",
                     pkg == nil ? L("Briefing PDF'ini ekle", "Add the briefing PDF")
                         : (critical.isEmpty ? L("Kritik NOTAM yok", "No critical NOTAMs")
-                           : critical.prefix(2).map { $0.summary ?? NotamDecoder.decode($0.text) }.joined(separator: " · "))) {
+                           : critical.prefix(3).map { n in NotamAnalyzer.impacts(n).first.map { "\(n.location): \($0.text)" } ?? n.summary ?? NotamDecoder.decode(n.text) }.joined(separator: " · "))) {
                     withAnimation { proxy.scrollTo("notam", anchor: .top) }
                 }
                 divider

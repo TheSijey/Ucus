@@ -211,7 +211,7 @@ struct TodayView: View {
     /// Brifing'de bakılacaklar.
     private func briefingRow(_ s: FlightAttributes.ContentState) -> some View {
         let key = BriefingStore.key(for: s)
-        let critical = (notams.packages[key].map { NotamFilter.relevant($0.notams, s) } ?? []).filter { $0.level == .critical }.count
+        let critical = (notams.packages[key].map { NotamFilter.relevant($0.notams, s, alternates: $0.alternates ?? []) } ?? []).filter { $0.level == .critical }.count
         let defects = briefing.notes(key).defects.count
         var parts: [String] = []
         if critical > 0 { parts.append(L("\(critical) kritik NOTAM", "\(critical) critical NOTAMs")) }

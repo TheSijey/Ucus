@@ -123,7 +123,7 @@ enum NotamParser {
             if n.location.isEmpty, let loc = capture(#"\b(L[A-Z]{3}|E[A-Z]{3}|K[A-Z]{3}|O[A-Z]{3}|U[A-Z]{3})\b"#, String(block.prefix(80))) {
                 n.location = loc
             }
-            n.level = NotamClassifier.level(n)
+            n.level = NotamAnalyzer.level(n)
             seen.insert(id)
             out.append(n)
         }
@@ -259,13 +259,20 @@ enum NotamAI {
             let lang = Lang.isEnglish ? "English" : "Turkish"
             let session = LanguageModelSession(instructions: """
                 You summarize aviation NOTAMs for airline pilots. Reply with ONE short plain-language sentence in \(lang), \
-                max 20 words, stating the operational impact (what is closed/unavailable/changed, where, and when if short). \
-                Keep runway, taxiway, stand and navaid identifiers exactly as written. Never add information that is not in the NOTAM.
+                max 18 words, stating the operational impact: what is closed, unserviceable, shortened or changed, and where. \
+                Keep runway, taxiway, stand and navaid identifiers exactly as written. If the NOTAM has a daily schedule, mention it. \
+                Never add information that is not in the NOTAM. Do not start with "NOTAM".
                 """)
+            let facts = NotamAnalyzer.impacts(n).map(\.text).joined(separator: "; ")
             do {
-                let r = try await session.respond(to: "Location: \(n.location)\nNOTAM: \(n.text)")
+                let r = try await session.respond(to: "Location: \(n.location)\n" + (facts.isEmpty ? "" : "Detected: \(facts)\n") + "Schedule: \(n.schedule)\nNOTAM: \(n.text)")
                 let out = r.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                return out.isEmpty ? nil : out
+                // Metinde olmayan pist/taksi yolu kimliği uyduran özet gösterilmez
+                guard !out.isEmpty, NotamAnalyzer.summaryIsFaithful(out, raw: n.raw) else {
+                    DebugLog.add("NOTAM özeti atıldı (metinle uyuşmuyor): \(n.id)")
+                    return nil
+                }
+                return out
             } catch {
                 DebugLog.add("NOTAM özeti hatası: \(error.localizedDescription)")
                 return nil
@@ -295,6 +302,10 @@ final class NotamStore: ObservableObject {
            let p = try? JSONDecoder().decode([String: NotamPackage].self, from: data) {
             let limit = Date().addingTimeInterval(-3 * 86_400)
             packages = p.filter { $0.value.importedAt > limit }
+            // Kurallar gelişince eski paketlerin seviyeleri yeniden hesaplanır
+            for k in packages.keys {
+                for i in packages[k]!.notams.indices { packages[k]!.notams[i].level = NotamAnalyzer.level(packages[k]!.notams[i]) }
+            }
         }
     }
 
